@@ -1,0 +1,38 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+/app/build
+/app/release
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# Model files (too large for git)
+*.tflite
+*.gguf
+*.so
+
+# Credentials
+*.env
+*api_key*
+*secret*
+
+# Model export artifacts
+*.onnx
+*.pt
+*.npy
+*_saved_model/
+calibration_*
+yolov8s.pt
+yolov8s.onnx
+
+# Models directory (local copy)
+models/

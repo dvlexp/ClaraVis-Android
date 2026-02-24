@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ClaraVis</string>
+    <string name="night_mode">Night Vision</string>
+    <string name="brightness">Brilho</string>
+    <string name="contrast">Contraste</string>
+    <string name="camera_permission_needed">ClaraVis precisa da camera para funcionar</string>
+</resources>

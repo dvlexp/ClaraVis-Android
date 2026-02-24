@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/rootLayout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- Camera Preview fullscreen -->
+    <androidx.camera.view.PreviewView
+        android:id="@+id/previewView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:scaleType="fillCenter"
+        app:implementationMode="compatible"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Overlay de detecção -->
+    <com.claravis.app.OverlayView
+        android:id="@+id/overlayView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="@id/previewView"
+        app:layout_constraintBottom_toBottomOf="@id/previewView"
+        app:layout_constraintStart_toStartOf="@id/previewView"
+        app:layout_constraintEnd_toEndOf="@id/previewView" />
+
+    <!-- Botões flutuantes (ocultáveis) -->
+    <LinearLayout
+        android:id="@+id/buttonsPanel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- Botão Night -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnNightMode"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="NIGHT"
+            android:textColor="#FF00E676"
+            app:strokeColor="#FF00E676"
+            app:cornerRadius="20dp"
+            android:textSize="12sp" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <!-- Botão TTS -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnTts"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_marginEnd="8dp"
+            android:text="VOZ"
+            android:textColor="#FF00E676"
+            app:strokeColor="#FF00E676"
+            app:cornerRadius="20dp"
+            android:textSize="12sp" />
+
+        <!-- Botão Configurações -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSettings"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="48dp"
+            android:layout_height="40dp"
+            android:text="⚙"
+            android:textColor="#FF00E676"
+            app:strokeColor="#FF00E676"
+            app:cornerRadius="20dp"
+            android:textSize="18sp"
+            android:minWidth="0dp"
+            android:padding="0dp"
+            app:iconPadding="0dp" />
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

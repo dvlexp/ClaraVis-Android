@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="#FF1A1A1A"
+    android:padding="20dp">
+
+    <!-- Handle bar -->
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="16dp"
+        android:background="#555555" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Configurações"
+        android:textColor="#FF00E676"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="20dp" />
+
+    <!-- === SEÇÃO: Overlay === -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="OVERLAY"
+        android:textColor="#888888"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Exibir detecções"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp" />
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switchOverlay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked="true" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="4dp">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Exibir FPS"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp" />
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switchFps"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked="true" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/labelFontSize"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Tamanho da fonte: 40"
+        android:textColor="#CCCCCC"
+        android:textSize="13sp"
+        android:layout_marginTop="4dp" />
+    <SeekBar
+        android:id="@+id/seekFontSize"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:min="20"
+        android:max="80"
+        android:progress="40"
+        android:progressTint="#FF00E676"
+        android:thumbTint="#FF00E676"
+        android:layout_marginBottom="16dp" />
+
+    <!-- === SEÇÃO: Câmera === -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="CÂMERA"
+        android:textColor="#888888"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnNightSettings"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:text="NIGHT MODE"
+        android:textColor="#FF00E676"
+        app:strokeColor="#FF00E676"
+        app:cornerRadius="8dp"
+        android:layout_marginBottom="12dp"
+        xmlns:app="http://schemas.android.com/apk/res-auto" />
+
+    <TextView
+        android:id="@+id/labelExposure"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Exposição: 0"
+        android:textColor="#CCCCCC"
+        android:textSize="13sp" />
+    <SeekBar
+        android:id="@+id/seekExposure"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:progressTint="#FF00E676"
+        android:thumbTint="#FF00E676"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/labelBrightness"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Brilho: 100%"
+        android:textColor="#CCCCCC"
+        android:textSize="13sp" />
+    <SeekBar
+        android:id="@+id/seekBrightness"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="200"
+        android:progress="100"
+        android:progressTint="#FF00E676"
+        android:thumbTint="#FF00E676"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/labelContrast"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Contraste: 100%"
+        android:textColor="#CCCCCC"
+        android:textSize="13sp" />
+    <SeekBar
+        android:id="@+id/seekContrast"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="200"
+        android:progress="100"
+        android:progressTint="#FF00E676"
+        android:thumbTint="#FF00E676"
+        android:layout_marginBottom="16dp" />
+
+    <!-- === SEÇÃO: Voz === -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="VOZ"
+        android:textColor="#888888"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="4dp">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Anúncios por voz"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp" />
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switchTts"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked="true" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/labelTtsInterval"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Intervalo: 3s"
+        android:textColor="#CCCCCC"
+        android:textSize="13sp" />
+    <SeekBar
+        android:id="@+id/seekTtsInterval"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:min="1"
+        android:max="10"
+        android:progress="3"
+        android:progressTint="#FF00E676"
+        android:thumbTint="#FF00E676"
+        android:layout_marginBottom="24dp" />
+
+</LinearLayout>
