@@ -36,7 +36,7 @@ class LocalVLM(private val context: Context) {
         private const val MMPROJ_FILENAME = "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf"
         private const val BINARY_NAME = "llama-mtmd-cli"
         private const val NATIVE_LIB_BINARY_NAME = "libllama_mtmd.so"
-        private const val MAX_TOKENS = 80
+        private const val MAX_TOKENS = 50  // SmolVLM-500M repete após ~30 tokens
         private const val TIMEOUT_SECONDS = 90L
     }
 
@@ -174,18 +174,15 @@ class LocalVLM(private val context: Context) {
                     "Objects detected: $items. "
                 } else ""
 
-                // Prompt adaptado à orientação — em inglês para o SmolVLM (melhor accuracy)
-                val orientationPrompt = when (cameraOrientation) {
+                // Prompt mínimo — SmolVLM-500M responde melhor com perguntas simples em inglês
+                val prompt = when (cameraOrientation) {
                     CameraOrientation.LOOKING_DOWN ->
-                        "The camera is pointing DOWN at the floor. Focus on: stairs, steps, holes, obstacles on the ground, floor type, curbs."
+                        "${yoloInfo}What is on the floor? Are there stairs, holes, or obstacles?"
                     CameraOrientation.LOOKING_FORWARD ->
-                        "The camera is pointing FORWARD at eye level. Focus on: path ahead, doors, corridors, signs, people approaching, stairs ahead."
+                        "${yoloInfo}Describe this room or corridor. Any doors, stairs, or signs?"
                     CameraOrientation.LOOKING_UP ->
-                        "The camera is pointing UP. Focus on: signs, labels, traffic lights, overhead obstacles."
+                        "${yoloInfo}What signs or labels are visible above?"
                 }
-
-                val prompt = "${yoloInfo}${orientationPrompt} " +
-                    "Briefly describe what you see for a visually impaired person. Focus on hazards and navigation. Max 2 sentences in Portuguese."
 
                 val result = runInference(tempImage.absolutePath, prompt)
                 if (result != null && result.isNotBlank()) {
@@ -292,13 +289,28 @@ class LocalVLM(private val context: Context) {
             !line.startsWith("encode_") &&
             line.isNotBlank()
         }
-        return lines.joinToString(" ")
+        var text = lines.joinToString(" ")
             .replace(Regex("<[^>]+>"), "")     // Remove HTML/XML tags
             .replace(Regex("\\[.*?\\]"), "")    // Remove [tokens]
             .replace(Regex("<\\|.*?\\|>"), "")  // Remove special tokens
             .replace(Regex("^\\s*Assistant:?\\s*", RegexOption.IGNORE_CASE), "")
+            // Remover ecos do prompt (SmolVLM-500M pode ecoar partes da instrução)
+            .replace(Regex("Camera pointing[^.]*\\.", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("Focus on[^.]*\\.", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("Describe in[^.]*\\.", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("Objects detected[^.]*\\.", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("blind person[^.]*\\.", RegexOption.IGNORE_CASE), "")
             .trim()
             .take(300)
+        // Se o resultado ficou vazio após limpeza, retornar o original limpo
+        if (text.length < 10) {
+            text = lines.joinToString(" ")
+                .replace(Regex("<[^>]+>"), "")
+                .replace(Regex("<\\|.*?\\|>"), "")
+                .trim()
+                .take(300)
+        }
+        return text
     }
 
     fun getStatus(): String {

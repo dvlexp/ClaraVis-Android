@@ -40,6 +40,7 @@ class SceneAnalyzer(private val context: Context) {
     private val executor = Executors.newSingleThreadExecutor()
     private var apiKey: String? = null
     var onSceneDescription: ((String) -> Unit)? = null
+    var onError: (() -> Unit)? = null
 
     init {
         loadApiKey()
@@ -173,10 +174,13 @@ REGRAS:
                 if (description != null) {
                     Log.i(TAG, "Scene [${cameraOrientation.name}]: $description")
                     onSceneDescription?.invoke(description)
+                } else {
+                    onError?.invoke()
                 }
 
             } catch (e: Exception) {
                 Log.e(TAG, "Scene analysis error: ${e.message}")
+                onError?.invoke()
             }
         }
     }

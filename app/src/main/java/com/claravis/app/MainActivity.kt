@@ -69,6 +69,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var sceneAnalyzer: SceneAnalyzer? = null
     private var lastSceneAnalysisTime = 0L
     private var sceneAnalysisInterval = 8000L  // 8 segundos
+    @Volatile private var cloudFailCount = 0  // Rastreia falhas consecutivas da nuvem
 
     // Local VLM (offline, on-device)
     private var localVLM: LocalVLM? = null
@@ -132,9 +133,16 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         // Inicializar Scene Analyzer (Cloud AI)
         sceneAnalyzer = SceneAnalyzer(this)
         sceneAnalyzer?.onSceneDescription = { description ->
+            if (description.isNotBlank()) {
+                cloudFailCount = 0  // Reset: cloud está funcionando
+            }
             runOnUiThread {
                 speakScene(description)
             }
+        }
+        sceneAnalyzer?.onError = {
+            cloudFailCount++
+            Log.d(TAG, "Cloud AI failed (count=$cloudFailCount)")
         }
 
         // Inicializar Local VLM (offline, on-device)
@@ -176,15 +184,20 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // ── TTS ────────────────────────────────────────────────
 
     override fun onInit(status: Int) {
+        Log.i(TAG, "TTS onInit called, status=$status")
         if (status == TextToSpeech.SUCCESS) {
             val result = tts?.setLanguage(Locale("pt", "BR"))
+            Log.i(TAG, "TTS setLanguage pt-BR result=$result")
             ttsReady = result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED
             if (!ttsReady) {
-                tts?.setLanguage(Locale("pt"))
+                val fallback = tts?.setLanguage(Locale("pt"))
+                Log.i(TAG, "TTS fallback to pt result=$fallback")
                 ttsReady = true
             }
             tts?.setSpeechRate(1.1f)
             Log.i(TAG, "TTS initialized, ready=$ttsReady")
+            // Mensagem de boas-vindas
+            tts?.speak("Clara Vis ativada", TextToSpeech.QUEUE_FLUSH, null, "claravis_welcome")
         } else {
             Log.e(TAG, "TTS init failed: $status")
         }
@@ -351,21 +364,29 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 // OCR — reconhecer texto de placas/sinalizações (a cada 5s)
                 if (now - lastOcrTime > ocrInterval) {
                     lastOcrTime = now
-                    runOCR(bitmap)
+                    val ocrCopy = bitmap.copy(Bitmap.Config.ARGB_8888, false)
+                    runOCR(ocrCopy)
                 }
 
-                // Análise de cena — prioridade: Local VLM > Cloud AI
-                val useLocalVLM = localVLM != null && localVLM!!.isAvailable()
-                val useCloudAI = !useLocalVLM && sceneAnalyzer != null && sceneAnalyzer!!.isConfigured()
+                // Análise de cena — prioridade: Cloud AI (Gemini) > Local VLM (fallback)
+                val cloudConfigured = sceneAnalyzer != null && sceneAnalyzer!!.isConfigured()
+                val cloudWorking = cloudConfigured && cloudFailCount < 3  // Se falhou 3x seguidas, desiste temporariamente
+                val localAvailable = localVLM != null && localVLM!!.isAvailable()
 
-                if (useLocalVLM && now - lastLocalVLMTime > localVLMInterval) {
-                    lastLocalVLMTime = now
-                    val copy = bitmap.copy(Bitmap.Config.ARGB_8888, false)
-                    localVLM?.analyzeScene(copy, detections, orientation)
-                } else if (useCloudAI && now - lastSceneAnalysisTime > sceneAnalysisInterval) {
+                if (cloudWorking && now - lastSceneAnalysisTime > sceneAnalysisInterval) {
                     lastSceneAnalysisTime = now
                     val copy = bitmap.copy(Bitmap.Config.ARGB_8888, false)
                     sceneAnalyzer?.analyzeScene(copy, detections, orientation, lastOcrText)
+                } else if (localAvailable && (!cloudConfigured || !cloudWorking) && now - lastLocalVLMTime > localVLMInterval) {
+                    // VLM local quando cloud não está disponível ou falha repetidamente
+                    lastLocalVLMTime = now
+                    val copy = bitmap.copy(Bitmap.Config.ARGB_8888, false)
+                    localVLM?.analyzeScene(copy, detections, orientation)
+                }
+
+                // Periodicamente re-tentar cloud se configurado (a cada 60s)
+                if (cloudConfigured && !cloudWorking && now - lastSceneAnalysisTime > 60000L) {
+                    cloudFailCount = 0  // Reset para tentar novamente
                 }
 
                 bitmap.recycle()
@@ -383,6 +404,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             val image = InputImage.fromBitmap(bitmap, 0)
             textRecognizer.process(image)
                 .addOnSuccessListener { result ->
+                    bitmap.recycle()  // Reciclar a cópia após uso
                     if (result.text.isNotBlank()) {
                         val cleanText = result.text.trim()
                             .replace("\n", " ")
@@ -397,9 +419,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     }
                 }
                 .addOnFailureListener { e ->
+                    bitmap.recycle()  // Reciclar mesmo em falha
                     Log.d(TAG, "OCR failed: ${e.message}")
                 }
         } catch (e: Exception) {
+            bitmap.recycle()
             Log.d(TAG, "OCR error: ${e.message}")
         }
     }

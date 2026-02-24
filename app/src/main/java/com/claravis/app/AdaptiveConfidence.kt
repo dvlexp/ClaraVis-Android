@@ -49,6 +49,7 @@ class AdaptiveConfidence(context: Context) {
         68, // micro-ondas — confundido com quadros
         69, // forno — confundido com gavetas
         41, // copo — detectado em qualquer superfície
+        64, // mouse — muito pequeno, frequente falso positivo
         65, // controle remoto — muito pequeno, alta falso positiva
         66, // teclado — confundido com grades, telas
         63, // notebook — confundido com livros, telas

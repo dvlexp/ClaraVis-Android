@@ -118,6 +118,33 @@ class ObjectDetector(private val context: Context) {
         69, // forno — confundido com gavetas
     )
 
+    // Classes de objetos pequenos que NÃO são relevantes para navegação
+    // Se aparecem com área minúscula, são ruído (ex: "mouse" com 1% da tela é noise)
+    private val irrelevantTinyClasses = setOf(
+        63, // notebook — irrelevante para navegação se minúsculo
+        64, // mouse — irrelevante para navegação
+        65, // controle remoto — irrelevante
+        66, // teclado — irrelevante se pequeno
+        67, // celular — irrelevante se pequeno
+        27, // gravata — irrelevante
+        29, // frisbee — raro
+        30, // esqui — raro
+        31, // snowboard — raro
+        33, // pipa — raro
+        34, // taco — raro
+        35, // luva — irrelevante
+        38, // raquete — raro
+        40, // taça — irrelevante
+        42, // garfo — irrelevante
+        43, // faca — irrelevante
+        44, // colher — irrelevante
+        73, // livro — irrelevante
+        76, // tesoura — irrelevante
+        78, // secador — irrelevante
+        79, // escova de dente — irrelevante
+    )
+    private val MIN_RELEVANT_AREA = 0.02f  // Objetos irrelevantes < 2% da tela = ignorar
+
     companion object {
         private const val TAG = "ClaraVis-Detector"
         private const val CONFIDENCE_THRESHOLD = 0.35f   // Subiu de 0.25 para 0.35
@@ -303,6 +330,11 @@ class ObjectDetector(private val context: Context) {
             if (maxClassId == 0 && aspectRatio > 3.0f) {
                 if (logCount < 3) Log.d(TAG, "Filtered (person too wide): aspect=${"%.2f".format(aspectRatio)}")
                 continue
+            }
+
+            // ── Filtro 5: Objetos irrelevantes para navegação com área muito pequena ──
+            if (maxClassId in irrelevantTinyClasses && boxArea < MIN_RELEVANT_AREA) {
+                continue  // Silencioso — esses são ruído constante
             }
 
             // Log das primeiras detecções válidas
