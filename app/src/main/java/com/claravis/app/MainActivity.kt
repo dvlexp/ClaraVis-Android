@@ -67,8 +67,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     // Scene Analyzer (Cloud AI)
     private var sceneAnalyzer: SceneAnalyzer? = null
-    private var lastSceneAnalysisTime = 0L
-    private var sceneAnalysisInterval = 8000L  // 8 segundos
+    private var lastSceneAnalysisTime = System.currentTimeMillis()  // Evita chamada imediata no primeiro frame
+    private var sceneAnalysisInterval = 15000L  // 15 segundos (evita rate limit no free tier)
     @Volatile private var cloudFailCount = 0  // Rastreia falhas consecutivas da nuvem
 
     // Local VLM (offline, on-device)

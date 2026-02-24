@@ -250,8 +250,8 @@ REGRAS:
                         return content.trim()
                     }
                 } else if (responseCode == 429) {
-                    Log.w(TAG, "Rate limited on $model, trying next...")
-                    continue
+                    Log.w(TAG, "Rate limited on $model, backing off")
+                    return null  // Não tentar outros modelos — respeitar rate limit
                 } else {
                     val errorBody = conn.errorStream?.bufferedReader()?.readText() ?: "unknown"
                     Log.e(TAG, "Gemini API error $responseCode ($model): ${errorBody.take(200)}")

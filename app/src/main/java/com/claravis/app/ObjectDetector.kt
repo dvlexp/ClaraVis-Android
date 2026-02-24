@@ -304,13 +304,13 @@ class ObjectDetector(private val context: Context) {
 
             // ── Filtro 1: Box muito grande = provavelmente fundo, não objeto ──
             if (boxArea > MAX_BOX_AREA) {
-                if (logCount < 3) Log.d(TAG, "Filtered (too large): class=$maxClassId area=${"%.2f".format(boxArea)} conf=${"%.2f".format(maxScore)}")
+                if (false) Log.d(TAG, "Filtered (too large): class=$maxClassId area=${"%.2f".format(boxArea)} conf=${"%.2f".format(maxScore)}")
                 continue
             }
 
             // ── Filtro 2: Objetos pequenos com box grande = falso positivo ──
             if (maxClassId in smallObjectClasses && boxArea > SMALL_OBJ_MAX_AREA) {
-                if (logCount < 3) Log.d(TAG, "Filtered (small obj, big box): class=$maxClassId area=${"%.2f".format(boxArea)}")
+                if (false) Log.d(TAG, "Filtered (small obj, big box): class=$maxClassId area=${"%.2f".format(boxArea)}")
                 continue
             }
 
@@ -319,7 +319,7 @@ class ObjectDetector(private val context: Context) {
                 // Confiança base mais alta
                 val requiredConf = if (boxArea > 0.25f) HIGH_CONF_THRESHOLD + 0.1f else HIGH_CONF_THRESHOLD
                 if (maxScore < requiredConf) {
-                    if (logCount < 3) Log.d(TAG, "Filtered (confusion-prone): class=$maxClassId conf=${"%.2f".format(maxScore)} < ${"%.2f".format(requiredConf)}")
+                    if (false) Log.d(TAG, "Filtered (confusion-prone): class=$maxClassId conf=${"%.2f".format(maxScore)} < ${"%.2f".format(requiredConf)}")
                     continue
                 }
             }
@@ -328,7 +328,7 @@ class ObjectDetector(private val context: Context) {
             val aspectRatio = if (boxH > 0.01f) boxW / boxH else 0f
             // Pessoa deve ser mais alta que larga (aspect < 1.2 geralmente)
             if (maxClassId == 0 && aspectRatio > 3.0f) {
-                if (logCount < 3) Log.d(TAG, "Filtered (person too wide): aspect=${"%.2f".format(aspectRatio)}")
+                if (false) Log.d(TAG, "Filtered (person too wide): aspect=${"%.2f".format(aspectRatio)}")
                 continue
             }
 
@@ -359,7 +359,7 @@ class ObjectDetector(private val context: Context) {
         }
 
         val result = nms(rawDetections)
-        if (logCount > 0 || rawDetections.isNotEmpty()) {
+        if (result.isNotEmpty()) {
             Log.i(TAG, "[$currentModelName] Detections: ${result.size} (raw: ${rawDetections.size})")
         }
         return result
