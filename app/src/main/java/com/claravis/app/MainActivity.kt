@@ -1,16 +1,21 @@
 package com.claravis.app
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.RectF
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.util.Size
@@ -30,7 +35,6 @@ import com.claravis.app.databinding.ActivityMainBinding
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
-import java.nio.ByteBuffer
 import java.util.Locale
 import java.util.concurrent.Executors
 
@@ -58,42 +62,61 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
     private var ttsReady = false
     private var ttsEnabled = true
-    private var ttsInterval = 3000L // ms
+    private var ttsInterval = 3000L
     private var lastTtsTime = 0L
     private var lastDetections: List<Detection> = emptyList()
 
     // UI
     private var buttonsVisible = true
 
-    // Scene Analyzer (Cloud AI)
+    // Flash / Lanterna
+    private var flashEnabled = false
+
+    // Zoom
+    private var currentZoom = 1.0f
+    private var maxZoom = 1.0f
+
+    // Scene Analyzer (Cloud AI — desativado por enquanto)
     private var sceneAnalyzer: SceneAnalyzer? = null
-    private var lastSceneAnalysisTime = System.currentTimeMillis()  // Evita chamada imediata no primeiro frame
-    private var sceneAnalysisInterval = 15000L  // 15 segundos (evita rate limit no free tier)
-    @Volatile private var cloudFailCount = 0  // Rastreia falhas consecutivas da nuvem
+    private var lastSceneAnalysisTime = System.currentTimeMillis()
+    private var sceneAnalysisInterval = 15000L
+    @Volatile private var cloudFailCount = 0
 
     // Local VLM (offline, on-device)
     private var localVLM: LocalVLM? = null
-    private var lastLocalVLMTime = 0L
-    private var localVLMInterval = 10000L  // 10 segundos (modelo local é mais lento)
+    private var lastLocalVLMTime = System.currentTimeMillis()
+    private var localVLMInterval = 30000L
 
-    // Acelerômetro — detecta orientação da câmera (chão/frente/cima)
+    // YOLO pause durante VLM inference
+    @Volatile private var yoloPaused = false
+
+    // Acelerômetro
     private var cameraAngleDetector: CameraAngleDetector? = null
 
-    // Sistema adaptativo — ajusta thresholds com o uso
+    // Sistema adaptativo
     private var adaptiveConfidence: AdaptiveConfidence? = null
 
-    // OCR — reconhecimento de texto em placas
+    // OCR
     private val textRecognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.Builder().build()) }
     private var lastOcrTime = 0L
     private var lastOcrText: String? = null
-    private var ocrInterval = 5000L  // OCR a cada 5 segundos
+    private var ocrInterval = 5000L
     private var lastOcrAnnouncedText: String? = null
+
+    // Movement detection — detecta objetos se aproximando
+    private var previousDetections: List<Detection> = emptyList()
+
+    // Voice interaction — reconhecimento de fala
+    private var speechRecognizer: SpeechRecognizer? = null
+    private var isListening = false
+    private var lastCapturedFrame: Bitmap? = null  // Frame capturado para pergunta por voz
 
     private val analysisExecutor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
 
     companion object {
         private const val CAMERA_PERMISSION_CODE = 100
+        private const val AUDIO_PERMISSION_CODE = 101
         private const val TAG = "ClaraVis"
     }
 
@@ -101,7 +124,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Manter tela ligada e visível mesmo sobre lockscreen
         window.addFlags(
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
             WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
@@ -109,7 +131,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
         )
 
-        // Wake lock para manter CPU ativa (app de navegação precisa rodar continuamente)
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
@@ -120,46 +141,48 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Inicializar TTS
+        // TTS
         tts = TextToSpeech(this, this)
 
-        // Inicializar detector
+        // Detector YOLO
         try {
             objectDetector = ObjectDetector(this)
         } catch (e: Exception) {
             Toast.makeText(this, "Erro ao carregar modelo IA: ${e.message}", Toast.LENGTH_LONG).show()
         }
 
-        // Inicializar Scene Analyzer (Cloud AI)
+        // Scene Analyzer (desativado por enquanto, mas mantido para futuro)
         sceneAnalyzer = SceneAnalyzer(this)
         sceneAnalyzer?.onSceneDescription = { description ->
-            if (description.isNotBlank()) {
-                cloudFailCount = 0  // Reset: cloud está funcionando
-            }
-            runOnUiThread {
-                speakScene(description)
-            }
+            if (description.isNotBlank()) cloudFailCount = 0
+            runOnUiThread { speakScene(description) }
         }
-        sceneAnalyzer?.onError = {
-            cloudFailCount++
-            Log.d(TAG, "Cloud AI failed (count=$cloudFailCount)")
-        }
+        sceneAnalyzer?.onError = { cloudFailCount++ }
 
-        // Inicializar Local VLM (offline, on-device)
+        // Local VLM com callbacks para pausar YOLO
         localVLM = LocalVLM(this)
         localVLM?.onSceneDescription = { description ->
-            runOnUiThread {
-                speakScene(description)
-            }
+            runOnUiThread { speakScene(description) }
+        }
+        localVLM?.onInferenceStart = {
+            yoloPaused = true
+            Log.i(TAG, "VLM inference started — YOLO paused")
+        }
+        localVLM?.onInferenceEnd = {
+            yoloPaused = false
+            Log.i(TAG, "VLM inference ended — YOLO resumed")
         }
         Log.i(TAG, "Local VLM: ${localVLM?.getStatus()}")
 
-        // Inicializar detector de ângulo (acelerômetro)
+        // Acelerômetro
         cameraAngleDetector = CameraAngleDetector(this)
         cameraAngleDetector?.start()
 
-        // Inicializar sistema adaptativo de confiança
+        // Adaptive confidence
         adaptiveConfidence = AdaptiveConfidence(this)
+
+        // Voice interaction
+        initSpeechRecognizer()
 
         if (hasCameraPermission()) {
             startCamera()
@@ -178,91 +201,227 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         tts?.stop()
         tts?.shutdown()
         textRecognizer.close()
+        speechRecognizer?.destroy()
+        lastCapturedFrame?.recycle()
         wakeLock?.let { if (it.isHeld) it.release() }
     }
 
     // ── TTS ────────────────────────────────────────────────
 
     override fun onInit(status: Int) {
-        Log.i(TAG, "TTS onInit called, status=$status")
+        Log.i(TAG, "TTS onInit status=$status")
         if (status == TextToSpeech.SUCCESS) {
             val result = tts?.setLanguage(Locale("pt", "BR"))
-            Log.i(TAG, "TTS setLanguage pt-BR result=$result")
             ttsReady = result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED
             if (!ttsReady) {
-                val fallback = tts?.setLanguage(Locale("pt"))
-                Log.i(TAG, "TTS fallback to pt result=$fallback")
+                tts?.setLanguage(Locale("pt"))
                 ttsReady = true
             }
             tts?.setSpeechRate(1.1f)
-            Log.i(TAG, "TTS initialized, ready=$ttsReady")
-            // Mensagem de boas-vindas
-            tts?.speak("Clara Vis ativada", TextToSpeech.QUEUE_FLUSH, null, "claravis_welcome")
-        } else {
-            Log.e(TAG, "TTS init failed: $status")
+            Log.i(TAG, "TTS ready=$ttsReady")
+            tts?.speak("Clara Vis ativada", TextToSpeech.QUEUE_FLUSH, null, "welcome")
         }
     }
+
+    private var lastSceneSpeakTime = 0L
 
     private fun speakDetections(detections: List<Detection>) {
         if (!ttsReady || !ttsEnabled || detections.isEmpty()) return
 
         val now = System.currentTimeMillis()
         if (now - lastTtsTime < ttsInterval) return
+        if (now - lastSceneSpeakTime < 15000L) return
         lastTtsTime = now
 
-        // Prioridade: obstáculos > pessoas > veículos > animais > outros
-        val sorted = detections.sortedWith(compareBy {
-            when (it.category) {
-                ObjectCategory.OBSTACLE -> 0
-                ObjectCategory.PERSON -> 1
-                ObjectCategory.VEHICLE -> 2
-                ObjectCategory.ANIMAL -> 3
-                ObjectCategory.OTHER -> 4
+        // Prioridade: se aproximando > obstáculos > pessoas > veículos > animais > outros
+        val approaching = detectApproaching(detections)
+        val sorted = detections.withIndex().sortedWith(compareBy {
+            when {
+                it.index in approaching -> -1  // Se aproximando = máxima prioridade
+                it.value.category == ObjectCategory.OBSTACLE -> 0
+                it.value.category == ObjectCategory.PERSON -> 1
+                it.value.category == ObjectCategory.VEHICLE -> 2
+                it.value.category == ObjectCategory.ANIMAL -> 3
+                else -> 4
             }
         })
 
         val toAnnounce = sorted.take(3)
-        val phrases = toAnnounce.map { det ->
+        val phrases = toAnnounce.map { (index, det) ->
             val position = objectDetector?.getPosition(det) ?: "à frente"
-            "${det.label} $position"
+            val prefix = if (index in approaching) "atenção, " else ""
+            "$prefix${det.label} $position"
         }
 
         val speech = phrases.joinToString(". ")
-        tts?.speak(speech, TextToSpeech.QUEUE_FLUSH, null, "claravis_det_${now}")
+        tts?.speak(speech, TextToSpeech.QUEUE_FLUSH, null, "det_$now")
     }
 
     private fun speakScene(description: String) {
         if (!ttsReady || !ttsEnabled || description.isBlank()) return
-        // Fala a descrição da cena da IA (na fila, após detecções)
-        tts?.speak(description, TextToSpeech.QUEUE_ADD, null, "claravis_scene_${System.currentTimeMillis()}")
+        lastSceneSpeakTime = System.currentTimeMillis()
+        tts?.speak(description, TextToSpeech.QUEUE_FLUSH, null, "scene_${System.currentTimeMillis()}")
+        Log.i(TAG, "TTS scene: ${description.take(80)}")
+    }
+
+    // ── Movement Detection ──────────────────────────────────
+
+    private fun detectApproaching(current: List<Detection>): Set<Int> {
+        val approaching = mutableSetOf<Int>()
+        for ((i, det) in current.withIndex()) {
+            // Procurar mesmo objeto no frame anterior (mesmo classId + IOU > 0.2)
+            val prev = previousDetections.find { prev ->
+                prev.classId == det.classId && iou(prev.boundingBox, det.boundingBox) > 0.2f
+            }
+            if (prev != null) {
+                val prevArea = prev.boundingBox.width() * prev.boundingBox.height()
+                val currArea = det.boundingBox.width() * det.boundingBox.height()
+                // Se o box cresceu >20% e ocupa >5% da tela = se aproximando
+                if (currArea > prevArea * 1.20f && currArea > 0.05f) {
+                    approaching.add(i)
+                }
+            }
+        }
+        previousDetections = current
+        return approaching
+    }
+
+    private fun iou(a: RectF, b: RectF): Float {
+        val interLeft = maxOf(a.left, b.left)
+        val interTop = maxOf(a.top, b.top)
+        val interRight = minOf(a.right, b.right)
+        val interBottom = minOf(a.bottom, b.bottom)
+        val interArea = maxOf(0f, interRight - interLeft) * maxOf(0f, interBottom - interTop)
+        val aArea = a.width() * a.height()
+        val bArea = b.width() * b.height()
+        return interArea / (aArea + bArea - interArea + 1e-5f)
+    }
+
+    // ── Voice Interaction ───────────────────────────────────
+
+    private fun initSpeechRecognizer() {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            Log.w(TAG, "Speech recognition not available")
+            return
+        }
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) {
+                runOnUiThread {
+                    binding.overlayView.listeningStatus = "🎤 Ouvindo..."
+                    binding.overlayView.postInvalidate()
+                    binding.btnMic.setTextColor(0xFFFF1744.toInt())
+                }
+            }
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() {
+                runOnUiThread {
+                    binding.overlayView.listeningStatus = "⏳ Processando..."
+                    binding.overlayView.postInvalidate()
+                }
+            }
+            override fun onError(error: Int) {
+                isListening = false
+                runOnUiThread {
+                    binding.overlayView.listeningStatus = null
+                    binding.overlayView.postInvalidate()
+                    binding.btnMic.setTextColor(0xFF00E676.toInt())
+                }
+                val msg = when (error) {
+                    SpeechRecognizer.ERROR_NO_MATCH -> "Não entendi. Tente novamente."
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Não ouvi nada."
+                    else -> null
+                }
+                if (msg != null) tts?.speak(msg, TextToSpeech.QUEUE_FLUSH, null, "voice_err")
+            }
+            override fun onResults(results: Bundle?) {
+                isListening = false
+                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                val spokenText = matches?.firstOrNull()
+                runOnUiThread {
+                    binding.overlayView.listeningStatus = null
+                    binding.overlayView.postInvalidate()
+                    binding.btnMic.setTextColor(0xFF00E676.toInt())
+                }
+                if (spokenText != null) {
+                    Log.i(TAG, "Voice: $spokenText")
+                    handleVoiceCommand(spokenText)
+                }
+            }
+            override fun onPartialResults(partialResults: Bundle?) {}
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+        })
+    }
+
+    private fun startListening() {
+        if (isListening) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), AUDIO_PERMISSION_CODE)
+            return
+        }
+
+        // Capturar frame atual para a pergunta
+        lastCapturedFrame?.recycle()
+        lastCapturedFrame = null
+
+        isListening = true
+        tts?.stop()  // Parar qualquer TTS em andamento
+
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1000L)
+        }
+        speechRecognizer?.startListening(intent)
+    }
+
+    private fun handleVoiceCommand(text: String) {
+        Log.i(TAG, "Processing voice: $text")
+
+        // Capturar o frame mais recente para enviar ao VLM
+        val frame = lastCapturedFrame
+        if (frame != null && !frame.isRecycled) {
+            val copy = frame.copy(Bitmap.Config.ARGB_8888, false)
+            tts?.speak("Analisando...", TextToSpeech.QUEUE_FLUSH, null, "voice_wait")
+            localVLM?.answerQuestion(copy, text) { answer ->
+                runOnUiThread {
+                    speakScene(answer)
+                }
+            }
+        } else {
+            tts?.speak("Não consegui capturar a imagem. Tente novamente.", TextToSpeech.QUEUE_FLUSH, null, "voice_no_frame")
+        }
     }
 
     // ── Camera ─────────────────────────────────────────────
 
     private fun hasCameraPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            this, Manifest.permission.CAMERA
-        ) == PackageManager.PERMISSION_GRANTED
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun requestCameraPermission() {
-        ActivityCompat.requestPermissions(
-            this,
-            arrayOf(Manifest.permission.CAMERA),
-            CAMERA_PERMISSION_CODE
-        )
+        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION_CODE)
     }
 
-    override fun onRequestPermissionsResult(
-        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
-    ) {
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == CAMERA_PERMISSION_CODE) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                startCamera()
-            } else {
-                Toast.makeText(this, "Permissão de câmera necessária", Toast.LENGTH_LONG).show()
-                finish()
+        when (requestCode) {
+            CAMERA_PERMISSION_CODE -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    startCamera()
+                } else {
+                    Toast.makeText(this, "Permissão de câmera necessária", Toast.LENGTH_LONG).show()
+                    finish()
+                }
+            }
+            AUDIO_PERMISSION_CODE -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    startListening()
+                }
             }
         }
     }
@@ -275,9 +434,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
             val preview = Preview.Builder()
                 .build()
-                .also {
-                    it.setSurfaceProvider(binding.previewView.surfaceProvider)
-                }
+                .also { it.setSurfaceProvider(binding.previewView.surfaceProvider) }
 
             val imageAnalysis = ImageAnalysis.Builder()
                 .setTargetResolution(Size(640, 480))
@@ -292,18 +449,19 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
             try {
                 cameraProvider.unbindAll()
-                camera = cameraProvider.bindToLifecycle(
-                    this, cameraSelector, preview, imageAnalysis
-                )
+                camera = cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis)
 
-                // Ler range de exposição do hardware
+                // Exposure range
                 val exposureState = camera?.cameraInfo?.exposureState
                 if (exposureState != null && exposureState.isExposureCompensationSupported) {
                     exposureMin = exposureState.exposureCompensationRange.lower
                     exposureMax = exposureState.exposureCompensationRange.upper
                 }
 
-                Log.i(TAG, "Camera started. Exposure range: $exposureMin..$exposureMax")
+                // Zoom range
+                val zoomState = camera?.cameraInfo?.zoomState?.value
+                maxZoom = zoomState?.maxZoomRatio ?: 1.0f
+                Log.i(TAG, "Camera started. Exposure: $exposureMin..$exposureMax, MaxZoom: $maxZoom")
 
             } catch (e: Exception) {
                 Toast.makeText(this, "Erro ao iniciar câmera: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -314,79 +472,71 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var loggedFrameInfo = false
 
     private fun processFrame(imageProxy: ImageProxy) {
-        val detector = objectDetector ?: run {
-            imageProxy.close()
-            return
-        }
-
         try {
             val bitmap = imageProxyToBitmap(imageProxy)
             if (bitmap != null) {
-                // Obter orientação atual da câmera via acelerômetro
                 val orientation = cameraAngleDetector?.orientation ?: CameraOrientation.LOOKING_FORWARD
-
-                val rawDetections = detector.detect(bitmap)
-
-                // Aplicar filtro adaptativo baseado na orientação e aprendizado
-                val detections = rawDetections.filter { det ->
-                    val adaptiveThreshold = adaptiveConfidence?.getThreshold(det.classId, orientation) ?: 0.35f
-                    det.confidence >= adaptiveThreshold
-                }
-
-                // Registrar detecções para aprendizado adaptativo
-                adaptiveConfidence?.recordFrame(detections)
-
-                // FPS tracking
-                frameCount++
                 val now = System.currentTimeMillis()
+
+                // Salvar frame para voice interaction
+                lastCapturedFrame?.recycle()
+                lastCapturedFrame = bitmap.copy(Bitmap.Config.ARGB_8888, false)
+
+                if (!yoloPaused) {
+                    // ═══ YOLO ativo — detecção normal ═══
+                    val detector = objectDetector
+                    if (detector != null) {
+                        val rawDetections = detector.detect(bitmap)
+
+                        val detections = rawDetections.filter { det ->
+                            val adaptiveThreshold = adaptiveConfidence?.getThreshold(det.classId, orientation) ?: 0.35f
+                            det.confidence >= adaptiveThreshold
+                        }
+
+                        adaptiveConfidence?.recordFrame(detections)
+
+                        // Movement detection
+                        val approaching = detectApproaching(detections)
+
+                        lastDetections = detections
+                        runOnUiThread {
+                            binding.overlayView.approachingIndices = approaching
+                            binding.overlayView.updateDetections(detections)
+                            speakDetections(detections)
+                        }
+                    }
+                }
+                // Se YOLO pausado, overlay mantém últimas detecções (stale mas aceitável)
+
+                // FPS tracking (sempre, mesmo com YOLO pausado)
+                frameCount++
                 val elapsed = now - lastFpsTime
                 if (elapsed >= 1000) {
                     val fps = frameCount * 1000f / elapsed
                     val angleLabel = cameraAngleDetector?.getOrientationLabel() ?: "?"
+                    val pauseLabel = if (yoloPaused) " | VLM" else ""
                     runOnUiThread {
                         binding.overlayView.fps = fps
-                        binding.overlayView.orientationLabel = angleLabel
+                        binding.overlayView.orientationLabel = "$angleLabel$pauseLabel"
                     }
                     frameCount = 0
                     lastFpsTime = now
-
-                    // Decay adaptativo a cada segundo
                     adaptiveConfidence?.applyDecay()
                 }
 
-                // Atualizar detecções e TTS
-                lastDetections = detections
-                runOnUiThread {
-                    binding.overlayView.updateDetections(detections)
-                    speakDetections(detections)
-                }
-
-                // OCR — reconhecer texto de placas/sinalizações (a cada 5s)
-                if (now - lastOcrTime > ocrInterval) {
+                // OCR (continua mesmo com YOLO pausado)
+                if (!yoloPaused && now - lastOcrTime > ocrInterval) {
                     lastOcrTime = now
                     val ocrCopy = bitmap.copy(Bitmap.Config.ARGB_8888, false)
                     runOCR(ocrCopy)
                 }
 
-                // Análise de cena — prioridade: Cloud AI (Gemini) > Local VLM (fallback)
-                val cloudConfigured = sceneAnalyzer != null && sceneAnalyzer!!.isConfigured()
-                val cloudWorking = cloudConfigured && cloudFailCount < 3  // Se falhou 3x seguidas, desiste temporariamente
-                val localAvailable = localVLM != null && localVLM!!.isAvailable()
-
-                if (cloudWorking && now - lastSceneAnalysisTime > sceneAnalysisInterval) {
-                    lastSceneAnalysisTime = now
-                    val copy = bitmap.copy(Bitmap.Config.ARGB_8888, false)
-                    sceneAnalyzer?.analyzeScene(copy, detections, orientation, lastOcrText)
-                } else if (localAvailable && (!cloudConfigured || !cloudWorking) && now - lastLocalVLMTime > localVLMInterval) {
-                    // VLM local quando cloud não está disponível ou falha repetidamente
+                // VLM local
+                val vlm = localVLM
+                if (vlm != null && vlm.isAvailable() && !vlm.isRunning && now - lastLocalVLMTime > localVLMInterval) {
                     lastLocalVLMTime = now
                     val copy = bitmap.copy(Bitmap.Config.ARGB_8888, false)
-                    localVLM?.analyzeScene(copy, detections, orientation)
-                }
-
-                // Periodicamente re-tentar cloud se configurado (a cada 60s)
-                if (cloudConfigured && !cloudWorking && now - lastSceneAnalysisTime > 60000L) {
-                    cloudFailCount = 0  // Reset para tentar novamente
+                    vlm.analyzeScene(copy, lastDetections, orientation)
                 }
 
                 bitmap.recycle()
@@ -398,82 +548,53 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    /** OCR — reconhece texto em placas e sinalizações usando ML Kit */
+    /** OCR — reconhece texto em placas */
     private fun runOCR(bitmap: Bitmap) {
         try {
             val image = InputImage.fromBitmap(bitmap, 0)
             textRecognizer.process(image)
                 .addOnSuccessListener { result ->
-                    bitmap.recycle()  // Reciclar a cópia após uso
+                    bitmap.recycle()
                     if (result.text.isNotBlank()) {
-                        val cleanText = result.text.trim()
-                            .replace("\n", " ")
-                            .take(200)
+                        val cleanText = result.text.trim().replace("\n", " ").take(200)
                         lastOcrText = cleanText
                         Log.i(TAG, "OCR: $cleanText")
-
-                        // Anunciar texto relevante por TTS (placas importantes)
                         announceRelevantText(cleanText)
                     } else {
                         lastOcrText = null
                     }
                 }
-                .addOnFailureListener { e ->
-                    bitmap.recycle()  // Reciclar mesmo em falha
-                    Log.d(TAG, "OCR failed: ${e.message}")
-                }
+                .addOnFailureListener { bitmap.recycle() }
         } catch (e: Exception) {
             bitmap.recycle()
-            Log.d(TAG, "OCR error: ${e.message}")
         }
     }
 
-    /** Anuncia texto de placas relevantes para navegação */
     private fun announceRelevantText(text: String) {
         if (!ttsReady || !ttsEnabled) return
-
         val lowerText = text.lowercase()
-
-        // Palavras-chave de placas relevantes para navegação
         val relevantKeywords = listOf(
-            "banheiro", "wc", "toilette", "restroom",
-            "saída", "saida", "exit",
-            "entrada", "entrada",
-            "elevador", "elevator",
-            "escada", "stairs",
-            "perigo", "danger", "cuidado", "atenção",
-            "proibido", "pare", "stop",
-            "andar", "piso", "floor",
-            "recepção", "informação", "info",
-            "emergência", "emergency",
-            "aberto", "fechado", "open", "closed"
+            "banheiro", "wc", "saída", "saida", "exit", "entrada",
+            "elevador", "escada", "stairs", "perigo", "danger", "cuidado",
+            "proibido", "pare", "stop", "andar", "piso",
+            "recepção", "emergência", "aberto", "fechado"
         )
-
         val found = relevantKeywords.filter { lowerText.contains(it) }
         if (found.isNotEmpty() && text != lastOcrAnnouncedText) {
             lastOcrAnnouncedText = text
-            val announcement = "Placa: $text"
-            tts?.speak(announcement, TextToSpeech.QUEUE_ADD, null, "claravis_ocr_${System.currentTimeMillis()}")
-            Log.i(TAG, "TTS OCR: $announcement")
+            tts?.speak("Placa: $text", TextToSpeech.QUEUE_ADD, null, "ocr_${System.currentTimeMillis()}")
         }
     }
 
-    /**
-     * Converte ImageProxy YUV_420_888 para Bitmap.
-     * Trata rotação do sensor e calcula aspect ratio para o OverlayView.
-     */
     private fun imageProxyToBitmap(imageProxy: ImageProxy): Bitmap? {
         val width = imageProxy.width
         val height = imageProxy.height
 
         if (!loggedFrameInfo) {
             loggedFrameInfo = true
-            Log.i(TAG, "Frame: ${width}x${height}, format=${imageProxy.format}, " +
-                "rotation=${imageProxy.imageInfo.rotationDegrees}, " +
-                "planes=${imageProxy.planes.size}")
+            Log.i(TAG, "Frame: ${width}x${height}, format=${imageProxy.format}, rotation=${imageProxy.imageInfo.rotationDegrees}")
         }
 
-        // Converter YUV_420_888 para ARGB
         val yPlane = imageProxy.planes[0]
         val uPlane = imageProxy.planes[1]
         val vPlane = imageProxy.planes[2]
@@ -516,7 +637,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
 
-        // Rotação para orientação portrait
         val rotation = imageProxy.imageInfo.rotationDegrees
         if (rotation != 0) {
             val matrix = Matrix()
@@ -525,17 +645,13 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             bitmap.recycle()
 
             val camAspect = rotated.width.toFloat() / rotated.height.toFloat()
-            mainHandler.post {
-                binding.overlayView.cameraAspectRatio = camAspect
-            }
+            mainHandler.post { binding.overlayView.cameraAspectRatio = camAspect }
 
             return rotated
         }
 
         val camAspect = bitmap.width.toFloat() / bitmap.height.toFloat()
-        mainHandler.post {
-            binding.overlayView.cameraAspectRatio = camAspect
-        }
+        mainHandler.post { binding.overlayView.cameraAspectRatio = camAspect }
 
         return bitmap
     }
@@ -543,7 +659,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // ── UI Controls ────────────────────────────────────────
 
     private fun setupControls() {
-        // Night mode toggle
+        // Night mode
         binding.btnNightMode.setOnClickListener {
             nightModeEnabled = !nightModeEnabled
             if (nightModeEnabled) {
@@ -556,6 +672,17 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 binding.btnNightMode.text = "NIGHT"
                 binding.btnNightMode.setTextColor(0xFF00E676.toInt())
                 binding.btnNightMode.setBackgroundColor(0x00000000)
+            }
+        }
+
+        // Flash / Lanterna
+        binding.btnFlash.setOnClickListener {
+            flashEnabled = !flashEnabled
+            camera?.cameraControl?.enableTorch(flashEnabled)
+            if (flashEnabled) {
+                binding.btnFlash.setTextColor(0xFFFFD600.toInt())
+            } else {
+                binding.btnFlash.setTextColor(0xFF00E676.toInt())
             }
         }
 
@@ -573,14 +700,28 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
 
         // Settings
-        binding.btnSettings.setOnClickListener {
-            openSettings()
+        binding.btnSettings.setOnClickListener { openSettings() }
+
+        // Mic — interação por voz
+        binding.btnMic.setOnClickListener { startListening() }
+
+        // Zoom +/-
+        binding.btnZoomIn.setOnClickListener {
+            currentZoom = (currentZoom + 0.5f).coerceAtMost(maxZoom)
+            camera?.cameraControl?.setZoomRatio(currentZoom)
+        }
+        binding.btnZoomOut.setOnClickListener {
+            currentZoom = (currentZoom - 0.5f).coerceAtLeast(1.0f)
+            camera?.cameraControl?.setZoomRatio(currentZoom)
         }
 
         // Toque na tela — ocultar/mostrar botões
         binding.previewView.setOnClickListener {
             buttonsVisible = !buttonsVisible
-            binding.buttonsPanel.visibility = if (buttonsVisible) View.VISIBLE else View.GONE
+            val vis = if (buttonsVisible) View.VISIBLE else View.GONE
+            binding.buttonsPanel.visibility = vis
+            binding.btnMic.visibility = vis
+            binding.zoomPanel.visibility = vis
         }
     }
 
@@ -599,27 +740,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         sheet.ttsEnabled = ttsEnabled
         sheet.ttsInterval = (ttsInterval / 1000).toInt()
 
-        sheet.onOverlayToggle = { enabled ->
-            binding.overlayView.overlayEnabled = enabled
-        }
-        sheet.onFpsToggle = { enabled ->
-            binding.overlayView.showFps = enabled
-        }
-        sheet.onFontSizeChange = { size ->
-            binding.overlayView.labelSize = size
-        }
-        sheet.onExposureChange = { value ->
-            currentExposure = value
-            camera?.cameraControl?.setExposureCompensationIndex(value)
-        }
-        sheet.onBrightnessChange = { progress ->
-            currentBrightness = progress / 100f
-            applyColorFilter()
-        }
-        sheet.onContrastChange = { progress ->
-            currentContrast = progress / 100f
-            applyColorFilter()
-        }
+        sheet.onOverlayToggle = { binding.overlayView.overlayEnabled = it }
+        sheet.onFpsToggle = { binding.overlayView.showFps = it }
+        sheet.onFontSizeChange = { binding.overlayView.labelSize = it }
+        sheet.onExposureChange = { currentExposure = it; camera?.cameraControl?.setExposureCompensationIndex(it) }
+        sheet.onBrightnessChange = { currentBrightness = it / 100f; applyColorFilter() }
+        sheet.onContrastChange = { currentContrast = it / 100f; applyColorFilter() }
         sheet.onNightModeClick = {
             nightModeEnabled = !nightModeEnabled
             if (nightModeEnabled) {
@@ -636,18 +762,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
         sheet.onTtsToggle = { enabled ->
             ttsEnabled = enabled
-            if (enabled) {
-                binding.btnTts.text = "VOZ"
-                binding.btnTts.setTextColor(0xFF00E676.toInt())
-            } else {
-                binding.btnTts.text = "MUDO"
-                binding.btnTts.setTextColor(0xFF888888.toInt())
-                tts?.stop()
-            }
+            binding.btnTts.text = if (enabled) "VOZ" else "MUDO"
+            binding.btnTts.setTextColor(if (enabled) 0xFF00E676.toInt() else 0xFF888888.toInt())
+            if (!enabled) tts?.stop()
         }
-        sheet.onTtsIntervalChange = { seconds ->
-            ttsInterval = seconds * 1000L
-        }
+        sheet.onTtsIntervalChange = { ttsInterval = it * 1000L }
 
         sheet.show(supportFragmentManager, "settings")
     }

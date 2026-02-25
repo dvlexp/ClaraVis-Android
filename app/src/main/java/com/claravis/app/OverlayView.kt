@@ -26,16 +26,19 @@ class OverlayView @JvmOverloads constructor(
     var objectCount: Int = 0
     var orientationLabel: String = ""
 
+    // Indices de detecções que estão se aproximando (super destaque)
+    var approachingIndices: Set<Int> = emptySet()
+
     // Aspect ratio da câmera (width/height no modo portrait, após rotação)
-    // Exemplo: câmera 640x480 → rotação 90° → 480x640 → ratio = 480/640 = 0.75
-    var cameraAspectRatio = 0.75f  // 3:4 padrão
+    var cameraAspectRatio = 0.75f
 
     // Cores por categoria
-    private val colorPerson = Color.parseColor("#00E676")       // Verde brilhante
-    private val colorObstacle = Color.parseColor("#FF1744")     // Vermelho
-    private val colorVehicle = Color.parseColor("#448AFF")      // Azul
-    private val colorAnimal = Color.parseColor("#FFD600")       // Amarelo
-    private val colorOther = Color.parseColor("#B0BEC5")        // Cinza
+    private val colorPerson = Color.parseColor("#00E676")
+    private val colorObstacle = Color.parseColor("#FF1744")
+    private val colorVehicle = Color.parseColor("#448AFF")
+    private val colorAnimal = Color.parseColor("#FFD600")
+    private val colorOther = Color.parseColor("#B0BEC5")
+    private val colorApproaching = Color.parseColor("#FF6D00")  // Laranja intenso para "se aproximando"
 
     private fun categoryColor(cat: ObjectCategory): Int = when (cat) {
         ObjectCategory.PERSON -> colorPerson
@@ -73,40 +76,39 @@ class OverlayView @JvmOverloads constructor(
         style = Paint.Style.FILL
     }
 
+    // Paint para glow de objetos se aproximando
+    private val glowPaint = Paint().apply {
+        style = Paint.Style.STROKE
+        isAntiAlias = true
+    }
+
+    // Status de escuta de voz
+    var listeningStatus: String? = null
+
     fun updateDetections(newDetections: List<Detection>) {
         detections = newDetections
         objectCount = newDetections.size
         postInvalidate()
     }
 
-    /**
-     * Converte coordenadas normalizadas da câmera (0.0-1.0) para coordenadas do OverlayView,
-     * compensando o crop do PreviewView com scaleType="fillCenter".
-     *
-     * fillCenter escala a imagem para COBRIR todo o view, cortando o excesso.
-     * Se a câmera tem aspect ratio maior que o view (mais larga), recorta horizontalmente.
-     */
     private fun cameraToViewRect(det: Detection): RectF {
         val viewW = width.toFloat()
         val viewH = height.toFloat()
-        val viewRatio = viewW / viewH  // ex: 1080/2340 ≈ 0.462
-        val camRatio = cameraAspectRatio   // ex: 480/640 = 0.75
+        val viewRatio = viewW / viewH
+        val camRatio = cameraAspectRatio
 
-        val sx: Float  // scale X: multiplica normalizedX para obter pixels no view
+        val sx: Float
         val sy: Float
-        val ox: Float  // offset X em pixels
+        val ox: Float
         val oy: Float
 
         if (camRatio > viewRatio) {
-            // Câmera é mais larga que o view → recorta horizontalmente
-            // fillCenter escala pela altura (height fits perfectly)
-            val displayedCamW = camRatio * viewH  // largura da câmera escalada
+            val displayedCamW = camRatio * viewH
             sx = displayedCamW
             sy = viewH
-            ox = (displayedCamW - viewW) / 2f  // quanto recorta de cada lado
+            ox = (displayedCamW - viewW) / 2f
             oy = 0f
         } else {
-            // Câmera é mais alta que o view → recorta verticalmente
             val displayedCamH = viewW / camRatio
             sx = viewW
             sy = displayedCamH
@@ -127,14 +129,16 @@ class OverlayView @JvmOverloads constructor(
 
         if (!overlayEnabled) {
             if (showFps) drawFps(canvas)
+            drawListeningStatus(canvas)
             return
         }
 
-        for (det in detections) {
-            val color = categoryColor(det.category)
+        for ((index, det) in detections.withIndex()) {
+            val isApproaching = index in approachingIndices
+            val color = if (isApproaching) colorApproaching else categoryColor(det.category)
             val rect = cameraToViewRect(det)
 
-            // Pular se fora da tela (recortado pelo fillCenter)
+            // Pular se fora da tela
             if (rect.right < 0 || rect.left > width || rect.bottom < 0 || rect.top > height) continue
 
             // Clampar aos limites da tela
@@ -143,61 +147,94 @@ class OverlayView @JvmOverloads constructor(
             rect.right = rect.right.coerceAtMost(width.toFloat())
             rect.bottom = rect.bottom.coerceAtMost(height.toFloat())
 
-            // Fill translúcido
-            fillPaint.color = (color and 0x00FFFFFF) or 0x20000000
-            canvas.drawRect(rect, fillPaint)
+            if (isApproaching) {
+                // ═══ SUPER DESTAQUE para objetos se aproximando ═══
 
-            // Contorno
-            boxPaint.color = color
-            boxPaint.strokeWidth = if (det.category == ObjectCategory.OBSTACLE) 8f else 5f
-            canvas.drawRect(rect, boxPaint)
+                // Glow externo (halo brilhante)
+                glowPaint.color = (color and 0x00FFFFFF) or 0x60000000
+                glowPaint.strokeWidth = 20f
+                canvas.drawRect(rect, glowPaint)
 
-            // Cantos reforçados (estilo moderno)
-            drawCorners(canvas, rect, color)
+                // Fill mais intenso
+                fillPaint.color = (color and 0x00FFFFFF) or 0x40000000
+                canvas.drawRect(rect, fillPaint)
 
-            // Label
-            val label = "${det.label} ${(det.confidence * 100).toInt()}%"
-            val tw = textPaint.measureText(label)
-            val th = textPaint.textSize + 8f
-            val padding = 6f
+                // Contorno grosso
+                boxPaint.color = color
+                boxPaint.strokeWidth = 12f
+                canvas.drawRect(rect, boxPaint)
 
-            val ly = if (rect.top > th + padding * 2 + 4) rect.top - th - padding * 2 else rect.top
-            val labelBg = RectF(rect.left, ly, rect.left + tw + padding * 2, ly + th + padding * 2)
+                // Cantos reforçados extra grossos
+                drawCorners(canvas, rect, color, 16f)
 
-            // Fundo do label com cor da categoria
-            val labelBgPaint = Paint().apply {
-                this.color = (color and 0x00FFFFFF) or 0xCC000000.toInt()
-                style = Paint.Style.FILL
+                // Label com alerta
+                val label = "⚠ ${det.label} ${(det.confidence * 100).toInt()}%"
+                drawLabel(canvas, rect, label, color, true)
+
+            } else {
+                // ═══ Desenho normal ═══
+
+                // Fill translúcido
+                fillPaint.color = (color and 0x00FFFFFF) or 0x20000000
+                canvas.drawRect(rect, fillPaint)
+
+                // Contorno
+                boxPaint.color = color
+                boxPaint.strokeWidth = if (det.category == ObjectCategory.OBSTACLE) 8f else 5f
+                canvas.drawRect(rect, boxPaint)
+
+                // Cantos reforçados
+                drawCorners(canvas, rect, color, 10f)
+
+                // Label
+                val label = "${det.label} ${(det.confidence * 100).toInt()}%"
+                drawLabel(canvas, rect, label, color, false)
             }
-            canvas.drawRoundRect(labelBg, 4f, 4f, labelBgPaint)
-            canvas.drawText(label, rect.left + padding, ly + th, textPaint)
         }
 
         if (showFps) drawFps(canvas)
+        drawListeningStatus(canvas)
     }
 
-    private fun drawCorners(canvas: Canvas, rect: RectF, color: Int) {
+    private fun drawLabel(canvas: Canvas, rect: RectF, label: String, color: Int, isAlert: Boolean) {
+        val paint = if (isAlert) {
+            Paint(textPaint).apply { textSize = textPaint.textSize * 1.2f }
+        } else textPaint
+
+        val tw = paint.measureText(label)
+        val th = paint.textSize + 8f
+        val padding = 6f
+
+        val ly = if (rect.top > th + padding * 2 + 4) rect.top - th - padding * 2 else rect.top
+        val labelBg = RectF(rect.left, ly, rect.left + tw + padding * 2, ly + th + padding * 2)
+
+        val bgAlpha = if (isAlert) 0xEE000000.toInt() else 0xCC000000.toInt()
+        val labelBgPaint = Paint().apply {
+            this.color = (color and 0x00FFFFFF) or bgAlpha
+            style = Paint.Style.FILL
+        }
+        canvas.drawRoundRect(labelBg, 4f, 4f, labelBgPaint)
+        canvas.drawText(label, rect.left + padding, ly + th, paint)
+    }
+
+    private fun drawCorners(canvas: Canvas, rect: RectF, color: Int, strokeW: Float = 10f) {
         val cornerLen = minOf(24f, rect.width() / 3, rect.height() / 3)
         if (cornerLen < 4f) return
 
         val p = Paint().apply {
             this.color = color
             style = Paint.Style.STROKE
-            strokeWidth = 10f
+            strokeWidth = strokeW
             isAntiAlias = true
             strokeCap = Paint.Cap.ROUND
         }
 
-        // Top-left
         canvas.drawLine(rect.left, rect.top, rect.left + cornerLen, rect.top, p)
         canvas.drawLine(rect.left, rect.top, rect.left, rect.top + cornerLen, p)
-        // Top-right
         canvas.drawLine(rect.right, rect.top, rect.right - cornerLen, rect.top, p)
         canvas.drawLine(rect.right, rect.top, rect.right, rect.top + cornerLen, p)
-        // Bottom-left
         canvas.drawLine(rect.left, rect.bottom, rect.left + cornerLen, rect.bottom, p)
         canvas.drawLine(rect.left, rect.bottom, rect.left, rect.bottom - cornerLen, p)
-        // Bottom-right
         canvas.drawLine(rect.right, rect.bottom, rect.right - cornerLen, rect.bottom, p)
         canvas.drawLine(rect.right, rect.bottom, rect.right, rect.bottom - cornerLen, p)
     }
@@ -211,5 +248,25 @@ class OverlayView @JvmOverloads constructor(
             8f, 8f, fpsBgPaint
         )
         canvas.drawText(text, width - tw, 28f, fpsPaint)
+    }
+
+    private fun drawListeningStatus(canvas: Canvas) {
+        val status = listeningStatus ?: return
+        val paint = Paint().apply {
+            color = Color.WHITE
+            textSize = 48f
+            isAntiAlias = true
+            isFakeBoldText = true
+            textAlign = Paint.Align.CENTER
+        }
+        val bgPaint = Paint().apply {
+            color = Color.parseColor("#DD000000")
+            style = Paint.Style.FILL
+        }
+        val tw = paint.measureText(status) + 40f
+        val cx = width / 2f
+        val cy = height * 0.4f
+        canvas.drawRoundRect(cx - tw / 2, cy - 40f, cx + tw / 2, cy + 20f, 12f, 12f, bgPaint)
+        canvas.drawText(status, cx, cy, paint)
     }
 }

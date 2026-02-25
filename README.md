@@ -11,13 +11,31 @@
   - **Vermelho**: Obstaculos (cadeiras, mochilas, hidrantes, etc.)
   - **Azul**: Veiculos
   - **Amarelo**: Animais
+  - **Laranja pulsante**: Objetos se aproximando (super destaque)
 - Filtros inteligentes contra falsos positivos
 - Sistema adaptativo que aprende e melhora com o uso
+- Deteccao de movimento: objetos com bounding box crescente recebem prioridade maxima
 
-### Analise de Cena por IA
-- **Local (offline)**: SmolVLM-500M via llama.cpp — funciona sem internet
-- **Nuvem**: Google Gemini 2.5 Flash Lite — analise avancada quando online
-- Prompts adaptativos baseados na orientacao da camera
+### Analise de Cena por IA (VLM Local)
+- **InternVL3-1B** (primario): Modelo de visao-linguagem com 1B parametros, Q8_0, ~960MB total
+  - Respostas em portugues brasileiro
+  - Descreve ambiente, piso, obstaculos, placas, pessoas
+  - ~66s de inferencia com YOLO pausado (Helio G85)
+- **SmolVLM-500M** (fallback): Mais rapido, menor, ~520MB total
+- Ambos executados via llama.cpp multimodal CLI (llama-mtmd-cli)
+- YOLO pausa automaticamente durante inferencia VLM para liberar CPU
+
+### Interacao por Voz com a Clara
+- Botao de microfone (🎤) para fazer perguntas a IA
+- Reconhecimento de fala em portugues (Android SpeechRecognizer)
+- Exemplos: "Voce esta vendo o controle?", "Qual e a placa do carro?"
+- Captura frame da camera + pergunta → VLM analisa → responde por TTS
+
+### Controles de Camera
+- **Lanterna** (🔦): Liga/desliga flash da camera
+- **Zoom**: Botoes +/- na lateral (ate 10x)
+- **Modo Noturno**: Exposicao maxima + ganho digital + contraste
+- **Brilho e Contraste**: Ajustaveis nas configuracoes
 
 ### Orientacao por Acelerometro
 O app detecta automaticamente para onde a camera esta apontando:
@@ -39,15 +57,10 @@ O app detecta automaticamente para onde a camera esta apontando:
 
 ### Feedback por Voz (TTS)
 - Text-to-Speech em portugues brasileiro
-- Prioridade de anuncio: obstaculos > pessoas > veiculos > animais
-- Posicao relativa: "pessoa a frente", "cadeira a esquerda"
-- Distancia estimada pelo tamanho do bounding box
+- Prioridade de anuncio: objetos se aproximando > obstaculos > pessoas > veiculos > animais
+- Posicao relativa: "pessoa a frente", "cadeira a esquerda, perto"
+- Descricoes de cena VLM tem prioridade sobre deteccoes YOLO
 - Intervalo configuravel
-
-### Modo Noturno
-- Exposicao maxima + ganho digital
-- Controle de brilho e contraste
-- Amplia visibilidade em ambientes escuros
 
 ## Arquitetura
 
@@ -65,10 +78,16 @@ Camera (CameraX) --> Frame --> [Pipeline paralelo]
                            |             |
                     +------+------+------+
                     |                    |
-              Overlay Engine      Scene Analyzer
-              (bounding boxes)   (VLM local / Gemini cloud)
+              Overlay Engine      Scene Analyzer (VLM)
+              (bounding boxes)   (InternVL3-1B / SmolVLM-500M)
                     |                    |
               Tela + HUD           TTS (voz)
+                    |
+              Movement Detector
+              (objetos se aproximando)
+                    |
+              Voice Interaction
+              (SpeechRecognizer → VLM → TTS)
 ```
 
 ## Requisitos
@@ -82,13 +101,19 @@ Camera (CameraX) --> Frame --> [Pipeline paralelo]
 ### Testado em
 - Xiaomi Redmi Note 9 (Helio G85, 4GB RAM, Android 12)
 
-### Para VLM Local (opcional)
-- ~521MB de espaco para modelos GGUF:
-  - `SmolVLM-500M-Instruct-Q8_0.gguf` (~417MB)
-  - `mmproj-SmolVLM-500M-Instruct-Q8_0.gguf` (~104MB)
-- Colocar em `/data/local/tmp/claravis/` via ADB
+### Para VLM Local (opcional mas recomendado)
+Modelos em `/data/local/tmp/claravis/` via ADB:
 
-### Para Analise Cloud (opcional)
+**InternVL3-1B (primario, ~960MB):**
+- `InternVL3-1B-Instruct-Q8_0.gguf` (~644MB)
+- `mmproj-InternVL3-1B-Instruct-Q8_0.gguf` (~317MB)
+- Fonte: `ggml-org/InternVL3-1B-Instruct-GGUF` no HuggingFace
+
+**SmolVLM-500M (fallback, ~520MB):**
+- `SmolVLM-500M-Instruct-Q8_0.gguf` (~417MB)
+- `mmproj-SmolVLM-500M-Instruct-Q8_0.gguf` (~104MB)
+
+### Para Analise Cloud (opcional, desativado por padrao)
 - Chave API do Google Gemini (gratuita em https://aistudio.google.com/apikey)
 - Salvar em `/sdcard/Download/claravis_api_key.txt`
 
@@ -102,19 +127,23 @@ cd ClaraVis-Android
 # Build debug
 ./gradlew assembleDebug
 
-# Instalar no dispositivo
+# Instalar no dispositivo (MIUI pode exigir workaround)
 adb install -r app/build/outputs/apk/debug/app-debug.apk
+
+# Workaround MIUI (se install falhar):
+adb push app/build/outputs/apk/debug/app-debug.apk /data/local/tmp/claravis_debug.apk
+adb shell pm install -r /data/local/tmp/claravis_debug.apk
 ```
 
 ## Estrutura do Projeto
 
 ```
 app/src/main/java/com/claravis/app/
-  MainActivity.kt          # Activity principal — integra todos os componentes
+  MainActivity.kt          # Activity principal — camera, TTS, voz, controles
   ObjectDetector.kt         # YOLOv8s/n TFLite — deteccao de objetos
-  OverlayView.kt            # Renderizacao de bounding boxes e HUD
+  OverlayView.kt            # Bounding boxes, HUD, super destaque, status de voz
   SceneAnalyzer.kt          # Gemini Cloud AI — analise de cena
-  LocalVLM.kt               # SmolVLM local via llama.cpp
+  LocalVLM.kt               # InternVL3-1B / SmolVLM local via llama.cpp
   CameraAngleDetector.kt    # Acelerometro — orientacao da camera
   AdaptiveConfidence.kt     # Machine learning adaptativo
   SettingsSheet.kt          # Configuracoes (BottomSheet)
@@ -135,9 +164,10 @@ app/src/main/jniLibs/arm64-v8a/
 | Camera | CameraX 1.3.1 |
 | Deteccao | YOLOv8s via TensorFlow Lite 2.14 |
 | OCR | Google ML Kit Text Recognition 16.0 |
-| VLM Local | SmolVLM-500M via llama.cpp (ARM64) |
-| VLM Cloud | Google Gemini 2.5 Flash Lite |
+| VLM Local | InternVL3-1B / SmolVLM-500M via llama.cpp (ARM64) |
+| VLM Cloud | Google Gemini 2.5 Flash Lite (desativado) |
 | TTS | Android TextToSpeech (pt-BR) |
+| Voice Input | Android SpeechRecognizer (pt-BR) |
 | Sensores | SensorManager (Rotation Vector / Accelerometer) |
 | UI | Material Design + Custom OverlayView |
 
@@ -149,9 +179,15 @@ app/src/main/jniLibs/arm64-v8a/
 - [x] TTS em portugues
 - [x] Gemini Cloud AI para analise de cena
 - [x] SmolVLM local (offline) via llama.cpp
+- [x] InternVL3-1B como VLM primario (melhor qualidade)
 - [x] OCR para leitura de placas
 - [x] Acelerometro para orientacao contextual
 - [x] Sistema adaptativo de confianca
+- [x] Lanterna e controle de zoom
+- [x] Deteccao de objetos se aproximando (movement tracking)
+- [x] Super destaque visual para alertas
+- [x] Interacao por voz (perguntar a Clara)
+- [x] Pausa inteligente do YOLO durante inferencia VLM
 - [ ] MiDaS para estimativa de profundidade
 - [ ] Modelo custom treinado para escadas/degraus
 - [ ] Modo de gravacao para demo/crowdfunding

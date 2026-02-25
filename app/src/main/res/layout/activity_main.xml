@@ -29,7 +29,7 @@
         app:layout_constraintStart_toStartOf="@id/previewView"
         app:layout_constraintEnd_toEndOf="@id/previewView" />
 
-    <!-- Botões flutuantes (ocultáveis) -->
+    <!-- Botões flutuantes topo (ocultáveis) -->
     <LinearLayout
         android:id="@+id/buttonsPanel"
         android:layout_width="0dp"
@@ -52,6 +52,20 @@
             app:strokeColor="#FF00E676"
             app:cornerRadius="20dp"
             android:textSize="12sp" />
+
+        <!-- Botão Lanterna -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnFlash"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:text="🔦"
+            android:textColor="#FF00E676"
+            app:strokeColor="#FF00E676"
+            app:cornerRadius="20dp"
+            android:textSize="16sp"
+            android:minWidth="0dp" />
 
         <View
             android:layout_width="0dp"
@@ -85,6 +99,67 @@
             android:minWidth="0dp"
             android:padding="0dp"
             app:iconPadding="0dp" />
+
+    </LinearLayout>
+
+    <!-- Botão Microfone (grande, centro-inferior) -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnMic"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:text="🎤"
+        android:textSize="28sp"
+        android:textColor="#FF00E676"
+        app:strokeColor="#FF00E676"
+        app:strokeWidth="2dp"
+        app:cornerRadius="36dp"
+        android:minWidth="0dp"
+        android:padding="0dp"
+        app:iconPadding="0dp"
+        android:layout_marginBottom="32dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Controles de Zoom (direita, centro vertical) -->
+    <LinearLayout
+        android:id="@+id/zoomPanel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="8dp"
+        android:layout_marginEnd="8dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnZoomIn"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:text="+"
+            android:textSize="20sp"
+            android:textColor="#FF00E676"
+            app:strokeColor="#6600E676"
+            app:cornerRadius="22dp"
+            android:minWidth="0dp"
+            android:padding="0dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnZoomOut"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginTop="8dp"
+            android:text="-"
+            android:textSize="20sp"
+            android:textColor="#FF00E676"
+            app:strokeColor="#6600E676"
+            app:cornerRadius="22dp"
+            android:minWidth="0dp"
+            android:padding="0dp" />
 
     </LinearLayout>
 
