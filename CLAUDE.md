@@ -30,7 +30,7 @@ adb logcat --pid=$(adb shell pidof -s com.claravis.app) | grep ClaraVis
 - **ObjectDetector.kt** — YOLOv8s/n TFLite inference. Auto-detects coord scale, applies confidence filters, NMS, and category classification.
 - **OverlayView.kt** — Custom View for rendering bounding boxes, labels, FPS counter, and orientation indicator.
 - **SceneAnalyzer.kt** — Google Gemini API integration with context-aware prompts based on camera orientation.
-- **LocalVLM.kt** — SmolVLM-500M via llama.cpp ProcessBuilder. Runs the static ARM64 binary from nativeLibraryDir.
+- **LocalVLM.kt** — InternVL3-1B / SmolVLM-500M via llama.cpp ProcessBuilder. Runs in parallel with YOLO (separate process). Binary loaded from nativeLibraryDir.
 - **CameraAngleDetector.kt** — SensorManager with rotation vector/accelerometer. Classifies LOOKING_DOWN/FORWARD/UP.
 - **AdaptiveConfidence.kt** — Learning system that adjusts per-class thresholds based on detection patterns. Persists via SharedPreferences.
 - **SettingsSheet.kt** — BottomSheetDialogFragment for overlay, camera, and TTS settings.
@@ -41,7 +41,7 @@ adb logcat --pid=$(adb shell pidof -s com.claravis.app) | grep ClaraVis
 - `yolov8s_float32.tflite` (43MB) — Primary detection model, placed in `app/src/main/assets/`
 - `yolov8n_float32.tflite` (13MB) — Fallback model, placed in `app/src/main/assets/`
 - `libllama_mtmd.so` (5.8MB) — Static ARM64 llama.cpp binary, placed in `app/src/main/jniLibs/arm64-v8a/`
-- SmolVLM GGUF models (521MB total) — Pushed to device via ADB at `/data/local/tmp/claravis/`
+- InternVL3-1B GGUF models (960MB total) or SmolVLM-500M (521MB fallback) — Pushed to device via ADB at `/data/local/tmp/claravis/`
 
 ### SELinux Workaround
 The llama.cpp binary is packaged as `libllama_mtmd.so` in jniLibs so Android extracts it to nativeLibraryDir with execute permission. Requires `extractNativeLibs=true` and `useLegacyPackaging=true`.
@@ -60,7 +60,9 @@ ADB serial: 05df114d0405
 - Detection confidence threshold: 0.35 (adaptive range: 0.25-0.70)
 - Camera orientation thresholds: DOWN < -45°, UP > -15°
 - TTS interval: 3s (configurable)
-- Scene analysis: 8s (cloud), 10s (local VLM)
+- Scene analysis: 15s (cloud), 30s (local VLM)
 - OCR interval: 5s
 - Local VLM timeout: 90s
-- Max tokens (VLM): 80
+- Max tokens (VLM): 50
+- YOLO + VLM rodam em paralelo (VLM como processo separado via llama.cpp)
+- Frame capture para voz: a cada 500ms (não todo frame)

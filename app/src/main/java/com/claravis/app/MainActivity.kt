@@ -87,8 +87,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var lastLocalVLMTime = System.currentTimeMillis()
     private var localVLMInterval = 30000L
 
-    // YOLO pause durante VLM inference
-    @Volatile private var yoloPaused = false
+    // VLM status (apenas display — YOLO sempre ativo)
+    @Volatile private var vlmActive = false
 
     // Acelerômetro
     private var cameraAngleDetector: CameraAngleDetector? = null
@@ -105,6 +105,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     // Movement detection — detecta objetos se aproximando
     private var previousDetections: List<Detection> = emptyList()
+    private var lastFrameCaptureTime = 0L
 
     // Voice interaction — reconhecimento de fala
     private var speechRecognizer: SpeechRecognizer? = null
@@ -159,18 +160,19 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
         sceneAnalyzer?.onError = { cloudFailCount++ }
 
-        // Local VLM com callbacks para pausar YOLO
+        // Local VLM (roda em paralelo com YOLO)
         localVLM = LocalVLM(this)
         localVLM?.onSceneDescription = { description ->
             runOnUiThread { speakScene(description) }
         }
         localVLM?.onInferenceStart = {
-            yoloPaused = true
-            Log.i(TAG, "VLM inference started — YOLO paused")
+            vlmActive = true
+            Log.i(TAG, "VLM inference started (YOLO continues)")
         }
         localVLM?.onInferenceEnd = {
-            yoloPaused = false
-            Log.i(TAG, "VLM inference ended — YOLO resumed")
+            vlmActive = false
+            lastLocalVLMTime = System.currentTimeMillis()  // Cooldown a partir do FIM
+            Log.i(TAG, "VLM inference ended")
         }
         Log.i(TAG, "Local VLM: ${localVLM?.getStatus()}")
 
@@ -478,35 +480,35 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 val orientation = cameraAngleDetector?.orientation ?: CameraOrientation.LOOKING_FORWARD
                 val now = System.currentTimeMillis()
 
-                // Salvar frame para voice interaction
-                lastCapturedFrame?.recycle()
-                lastCapturedFrame = bitmap.copy(Bitmap.Config.ARGB_8888, false)
+                // Salvar frame para voice interaction (a cada 500ms para reduzir GC)
+                if (now - lastFrameCaptureTime > 500) {
+                    lastCapturedFrame?.recycle()
+                    lastCapturedFrame = bitmap.copy(Bitmap.Config.ARGB_8888, false)
+                    lastFrameCaptureTime = now
+                }
 
-                if (!yoloPaused) {
-                    // ═══ YOLO ativo — detecção normal ═══
-                    val detector = objectDetector
-                    if (detector != null) {
-                        val rawDetections = detector.detect(bitmap)
+                // ═══ YOLO — sempre ativo, mesmo durante VLM ═══
+                val detector = objectDetector
+                if (detector != null) {
+                    val rawDetections = detector.detect(bitmap)
 
-                        val detections = rawDetections.filter { det ->
-                            val adaptiveThreshold = adaptiveConfidence?.getThreshold(det.classId, orientation) ?: 0.35f
-                            det.confidence >= adaptiveThreshold
-                        }
+                    val detections = rawDetections.filter { det ->
+                        val adaptiveThreshold = adaptiveConfidence?.getThreshold(det.classId, orientation) ?: 0.35f
+                        det.confidence >= adaptiveThreshold
+                    }
 
-                        adaptiveConfidence?.recordFrame(detections)
+                    adaptiveConfidence?.recordFrame(detections)
 
-                        // Movement detection
-                        val approaching = detectApproaching(detections)
+                    // Movement detection
+                    val approaching = detectApproaching(detections)
 
-                        lastDetections = detections
-                        runOnUiThread {
-                            binding.overlayView.approachingIndices = approaching
-                            binding.overlayView.updateDetections(detections)
-                            speakDetections(detections)
-                        }
+                    lastDetections = detections
+                    runOnUiThread {
+                        binding.overlayView.approachingIndices = approaching
+                        binding.overlayView.updateDetections(detections)
+                        speakDetections(detections)
                     }
                 }
-                // Se YOLO pausado, overlay mantém últimas detecções (stale mas aceitável)
 
                 // FPS tracking (sempre, mesmo com YOLO pausado)
                 frameCount++
@@ -514,7 +516,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 if (elapsed >= 1000) {
                     val fps = frameCount * 1000f / elapsed
                     val angleLabel = cameraAngleDetector?.getOrientationLabel() ?: "?"
-                    val pauseLabel = if (yoloPaused) " | VLM" else ""
+                    val pauseLabel = if (vlmActive) " | VLM" else ""
                     runOnUiThread {
                         binding.overlayView.fps = fps
                         binding.overlayView.orientationLabel = "$angleLabel$pauseLabel"
@@ -524,8 +526,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     adaptiveConfidence?.applyDecay()
                 }
 
-                // OCR (continua mesmo com YOLO pausado)
-                if (!yoloPaused && now - lastOcrTime > ocrInterval) {
+                // OCR — sempre ativo
+                if (now - lastOcrTime > ocrInterval) {
                     lastOcrTime = now
                     val ocrCopy = bitmap.copy(Bitmap.Config.ARGB_8888, false)
                     runOCR(ocrCopy)

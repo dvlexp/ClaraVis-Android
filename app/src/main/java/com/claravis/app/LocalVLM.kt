@@ -26,7 +26,7 @@ class LocalVLM(private val context: Context) {
         private const val TAG = "ClaraVis-LocalVLM"
         private const val BINARY_NAME = "llama-mtmd-cli"
         private const val NATIVE_LIB_BINARY_NAME = "libllama_mtmd.so"
-        private const val TIMEOUT_SECONDS = 180L
+        private const val TIMEOUT_SECONDS = 90L
     }
 
     @Volatile
