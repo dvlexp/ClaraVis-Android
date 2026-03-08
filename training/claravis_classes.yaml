@@ -1,0 +1,48 @@
+# ClaraVis — Classes otimizadas para navegação assistiva
+# Usar este arquivo como referência ao criar/combinar datasets
+#
+# Estas são as classes mais importantes para alguém com deficiência visual
+# navegando em ambientes internos e externos.
+
+# Caminho do dataset (ajustar conforme download do Roboflow)
+path: ./dataset
+train: train/images
+val: val/images
+
+# Classes de navegação (18 classes focadas)
+names:
+  # Pessoas e animais (prioridade máxima)
+  0: person
+  1: dog
+  2: cat
+
+  # Veículos (perigo)
+  3: car
+  4: bus
+  5: motorcycle
+  6: bicycle
+
+  # Sinalização (informação)
+  7: traffic_light
+  8: stop_sign
+  9: crosswalk
+
+  # Obstáculos de chão (segurança)
+  10: stairs
+  11: curb
+  12: pothole
+  13: pole
+
+  # Mobília / objetos no caminho
+  14: chair
+  15: table
+  16: bench
+  17: door
+
+# Notas sobre coleta de dados para ClaraVis:
+# - Gravar com câmera na altura do peito/cabeça (perspectiva real do usuário)
+# - Incluir variações de iluminação (dia, noite, sombra, luz direta)
+# - Incluir ambientes internos E externos
+# - Anotar objetos parcialmente ocultos (oclusão é comum)
+# - Mínimo recomendado: 500 imagens por classe
+# - Ideal: 2000+ imagens por classe

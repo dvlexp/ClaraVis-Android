@@ -55,18 +55,18 @@ class LocalVLM(private val context: Context) {
             name = "InternVL3-1B",
             modelFilename = "InternVL3-1B-Instruct-Q8_0.gguf",
             mmprojFilename = "mmproj-InternVL3-1B-Instruct-Q8_0.gguf",
-            maxTokens = 50,
+            maxTokens = 80,
             imageSize = 448,   // InternVL nativo 448x448 — não reduzir (mmproj espera este tamanho)
-            ctxSize = 512,
+            ctxSize = 768,
             promptStyle = PromptStyle.INTERNVL
         ),
         VLMModel(
             name = "SmolVLM-500M",
             modelFilename = "SmolVLM-500M-Instruct-Q8_0.gguf",
             mmprojFilename = "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf",
-            maxTokens = 50,
+            maxTokens = 80,
             imageSize = 384,   // SmolVLM usa 384x384
-            ctxSize = 512,
+            ctxSize = 768,
             promptStyle = PromptStyle.SMOLVLM
         )
     )
@@ -206,7 +206,7 @@ class LocalVLM(private val context: Context) {
                 tempImage = File(context.cacheDir, "vlm_frame.jpg")
                 FileOutputStream(tempImage).use { fos ->
                     val scaled = Bitmap.createScaledBitmap(bitmap, model.imageSize, model.imageSize, true)
-                    scaled.compress(Bitmap.CompressFormat.JPEG, 80, fos)
+                    scaled.compress(Bitmap.CompressFormat.JPEG, 90, fos)
                     scaled.recycle()
                 }
                 bitmap.recycle()
@@ -250,14 +250,14 @@ class LocalVLM(private val context: Context) {
                 }
             }
             PromptStyle.SMOLVLM -> {
-                // SmolVLM precisa de prompts curtos e diretos
+                // SmolVLM precisa de prompts curtos e estruturados
                 when (orientation) {
                     CameraOrientation.LOOKING_DOWN ->
-                        "${yoloInfo}What is on the floor? Are there stairs, holes, or obstacles?"
+                        "${yoloInfo}List what is on the ground: floor type, obstacles, steps, holes, objects. State positions: left, center, right."
                     CameraOrientation.LOOKING_FORWARD ->
-                        "${yoloInfo}Describe this room or corridor. Any doors, stairs, or signs?"
+                        "${yoloInfo}List what is ahead: people, doors, furniture, obstacles, signs. State positions: left, center, right, and distance: near or far."
                     CameraOrientation.LOOKING_UP ->
-                        "${yoloInfo}What signs or labels are visible above?"
+                        "${yoloInfo}List any signs, text, labels, or lights visible above. Read any text you see."
                 }
             }
         }

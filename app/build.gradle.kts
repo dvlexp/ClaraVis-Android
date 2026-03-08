@@ -59,9 +59,10 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
     implementation("androidx.camera:camera-view:$cameraxVersion")
 
-    // TensorFlow Lite
+    // TensorFlow Lite + GPU delegate for faster inference
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+    implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
 
     // ML Kit Text Recognition (OCR para placas e sinalizações)
     implementation("com.google.mlkit:text-recognition:16.0.0")

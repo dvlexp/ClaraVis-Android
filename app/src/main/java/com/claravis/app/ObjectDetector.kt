@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.RectF
 import android.util.Log
 import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.gpu.CompatibilityList
 import java.io.File
 import java.io.FileInputStream
 import java.nio.ByteBuffer
@@ -159,16 +160,36 @@ class ObjectDetector(private val context: Context) {
         interpreter = loadBestModel()
     }
 
+    private var gpuDelegateCloseable: AutoCloseable? = null
+
     private fun loadBestModel(): Interpreter {
         val options = Interpreter.Options()
         options.setNumThreads(4)
-        options.setUseNNAPI(false)
 
-        // Ordem de preferência: yolov8s > yolov8n (assets)
-        // Também verifica SD card para modelos maiores
+        // Tentar GPU delegate se hardware suportar (Mali G52 no Helio G85)
+        try {
+            val compatList = CompatibilityList()
+            if (compatList.isDelegateSupportedOnThisDevice) {
+                // Usar reflection para evitar problemas de versão de API
+                val gpuDelegateClass = Class.forName("org.tensorflow.lite.gpu.GpuDelegate")
+                val delegate = gpuDelegateClass.getDeclaredConstructor().newInstance()
+                val addDelegateMethod = Interpreter.Options::class.java.getMethod("addDelegate", Class.forName("org.tensorflow.lite.Delegate"))
+                addDelegateMethod.invoke(options, delegate)
+                gpuDelegateCloseable = delegate as? AutoCloseable
+                Log.i(TAG, "GPU delegate enabled")
+            } else {
+                Log.i(TAG, "GPU not supported, using CPU with 4 threads")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "GPU delegate unavailable, CPU fallback: ${e.message}")
+        }
+
+        // Ordem de preferência: float16 (menor, quase mesma qualidade) > float32 > nano
+        // Também verifica SD card para modelos customizados (fine-tuned)
         val modelCandidates = listOf(
-            "yolov8s_float32.tflite" to "asset",
+            "yolov8s_416_float16.tflite" to "asset",  // Fine-tuned 416x416
             "yolov8s_float16.tflite" to "asset",
+            "yolov8s_float32.tflite" to "asset",
             "yolov8n_float32.tflite" to "asset"
         )
 
@@ -241,10 +262,36 @@ class ObjectDetector(private val context: Context) {
         val pixels = IntArray(inputSize * inputSize)
         resized.getPixels(pixels, 0, inputSize, 0, 0, inputSize, inputSize)
 
+        // Calcular min/max de luminância para auto-contraste adaptativo
+        var minLum = 255f
+        var maxLum = 0f
         for (pixel in pixels) {
-            inputBuffer.putFloat(((pixel shr 16) and 0xFF) / 255.0f) // R
-            inputBuffer.putFloat(((pixel shr 8) and 0xFF) / 255.0f)  // G
-            inputBuffer.putFloat((pixel and 0xFF) / 255.0f)           // B
+            val r = (pixel shr 16) and 0xFF
+            val g = (pixel shr 8) and 0xFF
+            val b = pixel and 0xFF
+            val lum = 0.299f * r + 0.587f * g + 0.114f * b
+            if (lum < minLum) minLum = lum
+            if (lum > maxLum) maxLum = lum
+        }
+
+        // Aplicar auto-contraste se a imagem tiver range dinâmico baixo (ex: pouca luz)
+        val range = maxLum - minLum
+        val applyContrast = range > 10f && range < 200f  // Imagem com pouco contraste
+        val scale = if (applyContrast) 255f / range else 1f
+        val offset = if (applyContrast) minLum else 0f
+
+        for (pixel in pixels) {
+            var r = ((pixel shr 16) and 0xFF).toFloat()
+            var g = ((pixel shr 8) and 0xFF).toFloat()
+            var b = (pixel and 0xFF).toFloat()
+            if (applyContrast) {
+                r = ((r - offset) * scale).coerceIn(0f, 255f)
+                g = ((g - offset) * scale).coerceIn(0f, 255f)
+                b = ((b - offset) * scale).coerceIn(0f, 255f)
+            }
+            inputBuffer.putFloat(r / 255.0f)
+            inputBuffer.putFloat(g / 255.0f)
+            inputBuffer.putFloat(b / 255.0f)
         }
         resized.recycle()
 
@@ -409,5 +456,6 @@ class ObjectDetector(private val context: Context) {
 
     fun close() {
         interpreter.close()
+        gpuDelegateCloseable?.close()
     }
 }
