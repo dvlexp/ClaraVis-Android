@@ -42,7 +42,8 @@ class ObjectDetector(private val context: Context) {
     // Nome do modelo atual
     private var currentModelName = ""
 
-    private val labels = arrayOf(
+    // ── Labels COCO (80 classes) — modelo padrão ──
+    private val cocoLabels = arrayOf(
         "pessoa", "bicicleta", "carro", "moto", "avião", "ônibus", "trem", "caminhão",
         "barco", "semáforo", "hidrante", "placa de pare", "parquímetro", "banco",
         "pássaro", "gato", "cachorro", "cavalo", "ovelha", "vaca", "elefante",
@@ -58,8 +59,20 @@ class ObjectDetector(private val context: Context) {
         "secador de cabelo", "escova de dente"
     )
 
+    // ── Labels ClaraVis fine-tuned (36 classes) — treino #1 ──
+    private val claravisLabels = arrayOf(
+        "cama", "bicicleta", "lixeira", "livro", "cadeira", "cômoda", "escada descendo",
+        "flor", "notebook", "papel", "pessoa", "vaso", "buraco", "sapato", "chinelo",
+        "sofá", "escada", "mesa", "torneira", "árvore", "tronco", "caminhão",
+        "escada subindo", "mochila", "bicicleta", "carro", "gato", "cachorro", "porta",
+        "lixeira grande", "bolsa", "folhas", "celular", "moto", "sofá"
+    )
+
+    // Labels ativas — selecionadas automaticamente pelo modelo carregado
+    private var labels = cocoLabels
+
     // ── Classificação COCO → categoria de navegação ──
-    private val categoryMap = mapOf(
+    private val cocoCategoryMap = mapOf(
         0 to ObjectCategory.PERSON,
         // Veículos (mobilidade)
         1 to ObjectCategory.VEHICLE, 2 to ObjectCategory.VEHICLE, 3 to ObjectCategory.VEHICLE,
@@ -92,9 +105,49 @@ class ObjectDetector(private val context: Context) {
         72 to ObjectCategory.OBSTACLE   // geladeira
     )
 
+    // ── Classificação ClaraVis fine-tuned → categoria de navegação ──
+    private val claravisCategoryMap = mapOf(
+        10 to ObjectCategory.PERSON,    // pessoa
+        // Veículos
+        1 to ObjectCategory.VEHICLE,    // bicicleta
+        21 to ObjectCategory.VEHICLE,   // caminhão
+        24 to ObjectCategory.VEHICLE,   // bicicleta (2)
+        25 to ObjectCategory.VEHICLE,   // carro
+        33 to ObjectCategory.VEHICLE,   // moto
+        // Animais
+        26 to ObjectCategory.ANIMAL,    // gato
+        27 to ObjectCategory.ANIMAL,    // cachorro
+        // Obstáculos — TUDO que importa para navegação
+        0 to ObjectCategory.OBSTACLE,   // cama
+        2 to ObjectCategory.OBSTACLE,   // lixeira
+        4 to ObjectCategory.OBSTACLE,   // cadeira
+        5 to ObjectCategory.OBSTACLE,   // cômoda
+        6 to ObjectCategory.OBSTACLE,   // escada descendo ⚠️
+        7 to ObjectCategory.OBSTACLE,   // flor
+        11 to ObjectCategory.OBSTACLE,  // vaso
+        12 to ObjectCategory.OBSTACLE,  // buraco ⚠️
+        15 to ObjectCategory.OBSTACLE,  // sofá
+        16 to ObjectCategory.OBSTACLE,  // escada ⚠️
+        17 to ObjectCategory.OBSTACLE,  // mesa
+        18 to ObjectCategory.OBSTACLE,  // torneira
+        19 to ObjectCategory.OBSTACLE,  // árvore
+        20 to ObjectCategory.OBSTACLE,  // tronco ⚠️
+        22 to ObjectCategory.OBSTACLE,  // escada subindo ⚠️
+        23 to ObjectCategory.OBSTACLE,  // mochila
+        28 to ObjectCategory.OBSTACLE,  // porta
+        29 to ObjectCategory.OBSTACLE,  // lixeira grande
+        30 to ObjectCategory.OBSTACLE,  // bolsa
+        31 to ObjectCategory.OBSTACLE,  // folhas
+        34 to ObjectCategory.OBSTACLE   // sofá (2)
+    )
+
+    // Mapa ativo — selecionado automaticamente
+    private var categoryMap = cocoCategoryMap
+
     // ── Filtros de plausibilidade por classe ──
+    // ── Filtros COCO (não se aplicam ao modelo ClaraVis fine-tuned) ──
     // Classes que são geralmente PEQUENAS — se o box ocupa >40% da tela, é falso positivo
-    private val smallObjectClasses = setOf(
+    private val cocoSmallObjectClasses = setOf(
         9, 10, 11, 12,       // semáforo, hidrante, placa, parquímetro
         14, 15, 16,           // pássaro, gato, cachorro
         24, 25, 26, 28,      // mochila, guarda-chuva, bolsa, mala
@@ -107,49 +160,73 @@ class ObjectDetector(private val context: Context) {
         73, 74, 75, 76, 77, 78, 79  // livro, relógio, etc.
     )
 
-    // Classes de eletrodomésticos grandes que são confundidas com superfícies planas
-    // Esses precisam de confiança EXTRA alta quando o box é grande
-    private val confusionProneClasses = setOf(
-        62, // televisão — confundida com janelas, quadros, paredes
-        72, // geladeira — confundida com paredes, portas, armários
-        57, // sofá — confundido com camas, bancos
-        59, // cama — confundida com pisos, tapetes
-        60, // mesa — confundida com pisos, bancadas
-        68, // micro-ondas — confundido com quadros
-        69, // forno — confundido com gavetas
+    // ClaraVis: objetos pequenos — sapato, chinelo, celular, papel, flor, folhas
+    private val claravisSmallObjectClasses = setOf(
+        3,   // livro
+        7,   // flor
+        9,   // papel
+        13,  // sapato
+        14,  // chinelo
+        18,  // torneira
+        31,  // folhas
+        32   // celular
     )
 
-    // Classes de objetos pequenos que NÃO são relevantes para navegação
-    // Se aparecem com área minúscula, são ruído (ex: "mouse" com 1% da tela é noise)
-    private val irrelevantTinyClasses = setOf(
-        63, // notebook — irrelevante para navegação se minúsculo
-        64, // mouse — irrelevante para navegação
-        65, // controle remoto — irrelevante
-        66, // teclado — irrelevante se pequeno
-        67, // celular — irrelevante se pequeno
-        27, // gravata — irrelevante
-        29, // frisbee — raro
-        30, // esqui — raro
-        31, // snowboard — raro
-        33, // pipa — raro
-        34, // taco — raro
-        35, // luva — irrelevante
-        38, // raquete — raro
-        40, // taça — irrelevante
-        42, // garfo — irrelevante
-        43, // faca — irrelevante
-        44, // colher — irrelevante
-        73, // livro — irrelevante
-        76, // tesoura — irrelevante
-        78, // secador — irrelevante
-        79, // escova de dente — irrelevante
+    private var smallObjectClasses = cocoSmallObjectClasses
+
+    // Classes de eletrodomésticos grandes que são confundidas com superfícies planas
+    private val cocoConfusionProneClasses = setOf(
+        62, // televisão
+        72, // geladeira
+        57, // sofá
+        59, // cama
+        60, // mesa
+        68, // micro-ondas
+        69, // forno
     )
+
+    // ClaraVis: cama, sofá, mesa podem ser confundidos com pisos/paredes
+    private val claravisConfusionProneClasses = setOf(
+        0,   // cama
+        5,   // cômoda
+        15,  // sofá
+        34   // sofá (2)
+    )
+
+    private var confusionProneClasses = cocoConfusionProneClasses
+
+    // Classes irrelevantes para navegação se muito pequenas
+    private val cocoIrrelevantTinyClasses = setOf(
+        63, 64, 65, 66, 67, 27, 29, 30, 31, 33, 34, 35, 38, 40, 42, 43, 44, 73, 76, 78, 79
+    )
+
+    // ClaraVis: todas as classes são relevantes para navegação, poucas irrelevantes
+    private val claravisIrrelevantTinyClasses = setOf(
+        3,   // livro
+        9,   // papel
+        32   // celular
+    )
+
+    private var irrelevantTinyClasses = cocoIrrelevantTinyClasses
     private val MIN_RELEVANT_AREA = 0.02f  // Objetos irrelevantes < 2% da tela = ignorar
+
+    // ── Classes com poucas amostras no treino #1 — alto risco de falso positivo ──
+    // Essas classes tinham <50 imagens no dataset e geram muitos erros
+    private val claravisUnreliableClasses = setOf(
+        7,   // flor (6 imagens no treino)
+        9,   // papel (poucas, confunde com qualquer superfície clara)
+        6,   // escada descendo (16 imagens — confunde com subindo)
+        31,  // folhas (poucas, confunde com texturas)
+        14,  // chinelo
+        11,  // vaso
+    )
+    // Threshold mais alto para classes não-confiáveis
+    private val UNRELIABLE_CLASS_THRESHOLD = 0.75f
 
     companion object {
         private const val TAG = "ClaraVis-Detector"
-        private const val CONFIDENCE_THRESHOLD = 0.35f   // Subiu de 0.25 para 0.35
-        private const val HIGH_CONF_THRESHOLD = 0.55f    // Para classes propensas a confusão
+        private const val CONFIDENCE_THRESHOLD = 0.60f   // Subiu para 0.60 — reduz falsos positivos agressivamente
+        private const val HIGH_CONF_THRESHOLD = 0.70f    // Para classes propensas a confusão
         private const val IOU_THRESHOLD = 0.45f
         private const val MAX_BOX_AREA = 0.70f           // Box > 70% da tela = provavelmente fundo
         private const val SMALL_OBJ_MAX_AREA = 0.35f     // Objetos pequenos > 35% = falso positivo
@@ -187,10 +264,7 @@ class ObjectDetector(private val context: Context) {
         // Ordem de preferência: float16 (menor, quase mesma qualidade) > float32 > nano
         // Também verifica SD card para modelos customizados (fine-tuned)
         val modelCandidates = listOf(
-            "yolov8s_416_float16.tflite" to "asset",  // Fine-tuned 416x416
-            "yolov8s_float16.tflite" to "asset",
-            "yolov8s_float32.tflite" to "asset",
-            "yolov8n_float32.tflite" to "asset"
+            "claravis_model_416.tflite" to "asset",   // ClaraVis fine-tuned 36 classes
         )
 
         // Verificar modelos no SD card (permite upgrade sem reinstalar)
@@ -210,6 +284,7 @@ class ObjectDetector(private val context: Context) {
                     currentModelName = file.name
                     val inShape = interp.getInputTensor(0).shape()
                     inputSize = inShape[1]  // [1, H, W, 3]
+                    detectModelType(interp)
                     Log.i(TAG, "Loaded model from SD: $sdPath, inputSize=$inputSize")
                     logModelInfo(interp)
                     return interp
@@ -226,6 +301,7 @@ class ObjectDetector(private val context: Context) {
                 currentModelName = filename
                 val inShape = interp.getInputTensor(0).shape()
                 inputSize = inShape[1]
+                detectModelType(interp)
                 Log.i(TAG, "Loaded model from assets: $filename, inputSize=$inputSize")
                 logModelInfo(interp)
                 return interp
@@ -235,6 +311,38 @@ class ObjectDetector(private val context: Context) {
         }
 
         throw RuntimeException("Nenhum modelo YOLO encontrado!")
+    }
+
+    /**
+     * Auto-detecta se o modelo é COCO (80 classes) ou ClaraVis fine-tuned (36 classes)
+     * pelo output shape: [1, 4+numClasses, numBoxes]
+     * COCO: 4+80=84, ClaraVis: 4+36=40
+     */
+    private fun detectModelType(interp: Interpreter) {
+        val outputShape = interp.getOutputTensor(0).shape()
+        // Output shape é [1, 4+numClasses, numBoxes] ou [1, numBoxes, 4+numClasses]
+        val dim1 = outputShape[1]
+        val dim2 = outputShape[2]
+        val numClassesPlusFour = minOf(dim1, dim2)  // O menor é 4+numClasses
+
+        val numClasses = numClassesPlusFour - 4
+        Log.i(TAG, "Detected $numClasses classes in model (output shape: ${outputShape.contentToString()})")
+
+        if (numClasses == 36) {
+            labels = claravisLabels
+            categoryMap = claravisCategoryMap
+            smallObjectClasses = claravisSmallObjectClasses
+            confusionProneClasses = claravisConfusionProneClasses
+            irrelevantTinyClasses = claravisIrrelevantTinyClasses
+            Log.i(TAG, "Using ClaraVis fine-tuned labels (36 classes)")
+        } else {
+            labels = cocoLabels
+            categoryMap = cocoCategoryMap
+            smallObjectClasses = cocoSmallObjectClasses
+            confusionProneClasses = cocoConfusionProneClasses
+            irrelevantTinyClasses = cocoIrrelevantTinyClasses
+            Log.i(TAG, "Using COCO labels ($numClasses classes)")
+        }
     }
 
     private fun logModelInfo(interp: Interpreter) {
@@ -348,6 +456,14 @@ class ObjectDetector(private val context: Context) {
             val boxW = right - left
             val boxH = bottom - top
             val boxArea = boxW * boxH
+
+            // ── Filtro 0: Box minúsculo = ruído ──
+            if (boxArea < 0.003f) continue  // < 0.3% da tela = certamente ruído
+
+            // ── Filtro 0b: Classes não-confiáveis precisam confiança muito alta ──
+            if (labels === claravisLabels && maxClassId in claravisUnreliableClasses && maxScore < UNRELIABLE_CLASS_THRESHOLD) {
+                continue
+            }
 
             // ── Filtro 1: Box muito grande = provavelmente fundo, não objeto ──
             if (boxArea > MAX_BOX_AREA) {

@@ -160,21 +160,22 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
         sceneAnalyzer?.onError = { cloudFailCount++ }
 
-        // Local VLM (roda em paralelo com YOLO)
-        localVLM = LocalVLM(this)
-        localVLM?.onSceneDescription = { description ->
-            runOnUiThread { speakScene(description) }
-        }
-        localVLM?.onInferenceStart = {
-            vlmActive = true
-            Log.i(TAG, "VLM inference started (YOLO continues)")
-        }
-        localVLM?.onInferenceEnd = {
-            vlmActive = false
-            lastLocalVLMTime = System.currentTimeMillis()  // Cooldown a partir do FIM
-            Log.i(TAG, "VLM inference ended")
-        }
-        Log.i(TAG, "Local VLM: ${localVLM?.getStatus()}")
+        // Local VLM — DESATIVADO (consome CPU/RAM, atrapalha YOLO no Helio G85)
+        // Local VLM — DESATIVADO
+        // localVLM = LocalVLM(this)
+        // localVLM?.onSceneDescription = { description ->
+        //     runOnUiThread { speakScene(description) }
+        // }
+        // localVLM?.onInferenceStart = {
+        //     vlmActive = true
+        //     Log.i(TAG, "VLM inference started (YOLO continues)")
+        // }
+        // localVLM?.onInferenceEnd = {
+        //     vlmActive = false
+        //     lastLocalVLMTime = System.currentTimeMillis()
+        //     Log.i(TAG, "VLM inference ended")
+        // }
+        Log.i(TAG, "Local VLM: DESATIVADO")
 
         // Acelerômetro
         cameraAngleDetector = CameraAngleDetector(this)
@@ -533,13 +534,13 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     runOCR(ocrCopy)
                 }
 
-                // VLM local
-                val vlm = localVLM
-                if (vlm != null && vlm.isAvailable() && !vlm.isRunning && now - lastLocalVLMTime > localVLMInterval) {
-                    lastLocalVLMTime = now
-                    val copy = bitmap.copy(Bitmap.Config.ARGB_8888, false)
-                    vlm.analyzeScene(copy, lastDetections, orientation)
-                }
+                // VLM local — DESATIVADO (consome CPU/RAM, atrapalha YOLO)
+                // val vlm = localVLM
+                // if (vlm != null && vlm.isAvailable() && !vlm.isRunning && now - lastLocalVLMTime > localVLMInterval) {
+                //     lastLocalVLMTime = now
+                //     val copy = bitmap.copy(Bitmap.Config.ARGB_8888, false)
+                //     vlm.analyzeScene(copy, lastDetections, orientation)
+                // }
 
                 bitmap.recycle()
             }
