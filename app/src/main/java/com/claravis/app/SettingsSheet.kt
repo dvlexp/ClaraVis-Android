@@ -20,6 +20,10 @@ class SettingsSheet : BottomSheetDialogFragment() {
     var onNightModeClick: (() -> Unit)? = null
     var onTtsToggle: ((Boolean) -> Unit)? = null
     var onTtsIntervalChange: ((Int) -> Unit)? = null
+    var onSpeechRateChange: ((Float) -> Unit)? = null
+    var onUrgentCooldownChange: ((Long) -> Unit)? = null
+    var onConfidenceChange: ((Float) -> Unit)? = null
+    var onConfusionThresholdChange: ((Float) -> Unit)? = null
 
     // Estado atual (setado pelo caller)
     var overlayEnabled = true
@@ -33,6 +37,10 @@ class SettingsSheet : BottomSheetDialogFragment() {
     var nightModeOn = false
     var ttsEnabled = true
     var ttsInterval = 3
+    var speechRate = 20       // x10 (20 = 2.0x)
+    var urgentCooldown = 8    // x100ms (8 = 0.8s)
+    var confidence = 35       // % (35 = 0.35)
+    var confusionThreshold = 50  // % (50 = 0.50)
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         return inflater.inflate(R.layout.sheet_settings, container, false)
@@ -98,6 +106,27 @@ class SettingsSheet : BottomSheetDialogFragment() {
             onContrastChange?.invoke(progress)
         })
 
+        // Detecção
+        val labelConfidence = view.findViewById<TextView>(R.id.labelConfidence)
+        val seekConfidence = view.findViewById<SeekBar>(R.id.seekConfidence)
+        seekConfidence.progress = confidence
+        labelConfidence.text = "Sensibilidade: $confidence%"
+        seekConfidence.setOnSeekBarChangeListener(simpleSeekListener { progress ->
+            val p = progress.coerceAtLeast(10)
+            labelConfidence.text = "Sensibilidade: $p%"
+            onConfidenceChange?.invoke(p / 100f)
+        })
+
+        val labelConfusion = view.findViewById<TextView>(R.id.labelConfusionThreshold)
+        val seekConfusion = view.findViewById<SeekBar>(R.id.seekConfusionThreshold)
+        seekConfusion.progress = confusionThreshold
+        labelConfusion.text = "Filtro confusão: $confusionThreshold%"
+        seekConfusion.setOnSeekBarChangeListener(simpleSeekListener { progress ->
+            val p = progress.coerceAtLeast(20)
+            labelConfusion.text = "Filtro confusão: $p%"
+            onConfusionThresholdChange?.invoke(p / 100f)
+        })
+
         // Voz
         val switchTts = view.findViewById<SwitchMaterial>(R.id.switchTts)
         switchTts.isChecked = ttsEnabled
@@ -110,6 +139,26 @@ class SettingsSheet : BottomSheetDialogFragment() {
         seekInterval.setOnSeekBarChangeListener(simpleSeekListener { progress ->
             labelInterval.text = "Intervalo: ${progress}s"
             onTtsIntervalChange?.invoke(progress)
+        })
+
+        val labelRate = view.findViewById<TextView>(R.id.labelSpeechRate)
+        val seekRate = view.findViewById<SeekBar>(R.id.seekSpeechRate)
+        seekRate.progress = speechRate
+        labelRate.text = "Velocidade da fala: ${"%.1f".format(speechRate / 10f)}x"
+        seekRate.setOnSeekBarChangeListener(simpleSeekListener { progress ->
+            val p = progress.coerceAtLeast(5)
+            labelRate.text = "Velocidade da fala: ${"%.1f".format(p / 10f)}x"
+            onSpeechRateChange?.invoke(p / 10f)
+        })
+
+        val labelUrgent = view.findViewById<TextView>(R.id.labelUrgentCooldown)
+        val seekUrgent = view.findViewById<SeekBar>(R.id.seekUrgentCooldown)
+        seekUrgent.progress = urgentCooldown
+        labelUrgent.text = "Cooldown urgente: ${"%.1f".format(urgentCooldown / 10f)}s"
+        seekUrgent.setOnSeekBarChangeListener(simpleSeekListener { progress ->
+            val p = progress.coerceAtLeast(3)
+            labelUrgent.text = "Cooldown urgente: ${"%.1f".format(p / 10f)}s"
+            onUrgentCooldownChange?.invoke(p * 100L)
         })
     }
 

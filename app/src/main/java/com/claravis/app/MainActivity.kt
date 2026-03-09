@@ -2,18 +2,14 @@ package com.claravis.app
 
 import android.Manifest
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
-import android.graphics.ImageFormat
 import android.graphics.Matrix
 import android.graphics.Paint
-import android.graphics.Rect
 import android.graphics.RectF
-import android.graphics.YuvImage
-import java.io.ByteArrayOutputStream
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -70,6 +66,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var ttsInterval = 3000L
     private var lastTtsTime = 0L
     private var lastDetections: List<Detection> = emptyList()
+    private var speechRate = 2.0f
+
+    // SharedPreferences para persistir configurações
+    private lateinit var prefs: SharedPreferences
 
     // UI
     private var buttonsVisible = true
@@ -147,12 +147,17 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Carregar configurações salvas
+        prefs = getSharedPreferences("claravis_settings", MODE_PRIVATE)
+        loadSettings()
+
         // TTS
         tts = TextToSpeech(this, this)
 
         // Detector YOLO
         try {
             objectDetector = ObjectDetector(this)
+            applyDetectorSettings()
         } catch (e: Exception) {
             Toast.makeText(this, "Erro ao carregar modelo IA: ${e.message}", Toast.LENGTH_LONG).show()
         }
@@ -201,6 +206,22 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         setupControls()
     }
 
+    private fun loadSettings() {
+        ttsInterval = prefs.getLong("tts_interval", 3000L)
+        speechRate = prefs.getFloat("speech_rate", 2.0f)
+        urgentTtsInterval = prefs.getLong("urgent_cooldown", 800L)
+        ttsEnabled = prefs.getBoolean("tts_enabled", true)
+    }
+
+    private fun applyDetectorSettings() {
+        objectDetector?.confidenceThreshold = prefs.getFloat("confidence", ObjectDetector.DEFAULT_CONFIDENCE)
+        objectDetector?.highConfThreshold = prefs.getFloat("confusion_threshold", ObjectDetector.DEFAULT_HIGH_CONF)
+    }
+
+    private fun saveSetting(key: String, value: Float) = prefs.edit().putFloat(key, value).apply()
+    private fun saveSetting(key: String, value: Long) = prefs.edit().putLong(key, value).apply()
+    private fun saveSetting(key: String, value: Boolean) = prefs.edit().putBoolean(key, value).apply()
+
     override fun onDestroy() {
         super.onDestroy()
         cameraAngleDetector?.stop()
@@ -225,7 +246,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 tts?.setLanguage(Locale("pt"))
                 ttsReady = true
             }
-            tts?.setSpeechRate(2.0f)  // Velocidade 2x para reagir antes
+            tts?.setSpeechRate(speechRate)
             Log.i(TAG, "TTS ready=$ttsReady")
             tts?.speak("Clara Vis ativada", TextToSpeech.QUEUE_FLUSH, null, "welcome")
         }
@@ -240,7 +261,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         // v1 labels
         "escada descendo", "escada subindo"
     )
-    private val URGENT_TTS_INTERVAL = 800L  // 0.8s para perigos
+    private var urgentTtsInterval = 800L  // 0.8s para perigos
     private var lastUrgentLabel = ""
 
     private fun speakDetections(detections: List<Detection>, approaching: Set<Int> = emptySet()) {
@@ -254,7 +275,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         // Cooldown reduzido para perigos urgentes ou objetos se aproximando
         val effectiveInterval = when {
-            hasUrgent || hasApproaching -> URGENT_TTS_INTERVAL
+            hasUrgent || hasApproaching -> urgentTtsInterval
             else -> ttsInterval
         }
 
@@ -776,6 +797,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         sheet.nightModeOn = nightModeEnabled
         sheet.ttsEnabled = ttsEnabled
         sheet.ttsInterval = (ttsInterval / 1000).toInt()
+        sheet.speechRate = (speechRate * 10).toInt()
+        sheet.urgentCooldown = (urgentTtsInterval / 100).toInt()
+        sheet.confidence = ((objectDetector?.confidenceThreshold ?: 0.35f) * 100).toInt()
+        sheet.confusionThreshold = ((objectDetector?.highConfThreshold ?: 0.50f) * 100).toInt()
 
         sheet.onOverlayToggle = { binding.overlayView.overlayEnabled = it }
         sheet.onFpsToggle = { binding.overlayView.showFps = it }
@@ -799,11 +824,32 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
         sheet.onTtsToggle = { enabled ->
             ttsEnabled = enabled
+            saveSetting("tts_enabled", enabled)
             binding.btnTts.text = if (enabled) "VOZ" else "MUDO"
             binding.btnTts.setTextColor(if (enabled) 0xFF00E676.toInt() else 0xFF888888.toInt())
             if (!enabled) tts?.stop()
         }
-        sheet.onTtsIntervalChange = { ttsInterval = it * 1000L }
+        sheet.onTtsIntervalChange = {
+            ttsInterval = it * 1000L
+            saveSetting("tts_interval", ttsInterval)
+        }
+        sheet.onSpeechRateChange = {
+            speechRate = it
+            tts?.setSpeechRate(speechRate)
+            saveSetting("speech_rate", speechRate)
+        }
+        sheet.onUrgentCooldownChange = {
+            urgentTtsInterval = it
+            saveSetting("urgent_cooldown", urgentTtsInterval)
+        }
+        sheet.onConfidenceChange = {
+            objectDetector?.confidenceThreshold = it
+            saveSetting("confidence", it)
+        }
+        sheet.onConfusionThresholdChange = {
+            objectDetector?.highConfThreshold = it
+            saveSetting("confusion_threshold", it)
+        }
 
         sheet.show(supportFragmentManager, "settings")
     }

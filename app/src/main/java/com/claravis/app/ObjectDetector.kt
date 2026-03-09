@@ -292,13 +292,17 @@ class ObjectDetector(private val context: Context) {
     // Threshold mais alto para classes não-confiáveis
     private val UNRELIABLE_CLASS_THRESHOLD = 0.60f
 
+    // Thresholds configuráveis via Settings
+    var confidenceThreshold = DEFAULT_CONFIDENCE
+    var highConfThreshold = DEFAULT_HIGH_CONF
+
     companion object {
         private const val TAG = "ClaraVis-Detector"
-        private const val CONFIDENCE_THRESHOLD = 0.35f   // Baixo para detectar mais, TTS rápido compensa
-        private const val HIGH_CONF_THRESHOLD = 0.50f    // Para classes propensas a confusão
+        const val DEFAULT_CONFIDENCE = 0.35f
+        const val DEFAULT_HIGH_CONF = 0.50f
         private const val IOU_THRESHOLD = 0.45f
-        private const val MAX_BOX_AREA = 0.70f           // Box > 70% da tela = provavelmente fundo
-        private const val SMALL_OBJ_MAX_AREA = 0.35f     // Objetos pequenos > 35% = falso positivo
+        private const val MAX_BOX_AREA = 0.70f
+        private const val SMALL_OBJ_MAX_AREA = 0.35f
     }
 
     init {
@@ -520,7 +524,7 @@ class ObjectDetector(private val context: Context) {
                 }
             }
 
-            if (maxScore < CONFIDENCE_THRESHOLD * 0.7f) continue  // Pre-filter rápido
+            if (maxScore < confidenceThreshold * 0.7f) continue  // Pre-filter rápido
 
             val cx = output[0][i] / coordScale
             val cy = output[1][i] / coordScale
@@ -559,7 +563,7 @@ class ObjectDetector(private val context: Context) {
             // ── Filtro 3: Classes propensas a confusão precisam confiança extra ──
             if (maxClassId in confusionProneClasses) {
                 // Confiança base mais alta
-                val requiredConf = if (boxArea > 0.25f) HIGH_CONF_THRESHOLD + 0.1f else HIGH_CONF_THRESHOLD
+                val requiredConf = if (boxArea > 0.25f) highConfThreshold + 0.1f else highConfThreshold
                 if (maxScore < requiredConf) {
                     if (false) Log.d(TAG, "Filtered (confusion-prone): class=$maxClassId conf=${"%.2f".format(maxScore)} < ${"%.2f".format(requiredConf)}")
                     continue
