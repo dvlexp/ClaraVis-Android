@@ -4,11 +4,16 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
+import android.graphics.ImageFormat
 import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.RectF
+import android.graphics.YuvImage
+import java.io.ByteArrayOutputStream
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -220,7 +225,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 tts?.setLanguage(Locale("pt"))
                 ttsReady = true
             }
-            tts?.setSpeechRate(1.1f)
+            tts?.setSpeechRate(2.0f)  // Velocidade 2x para reagir antes
             Log.i(TAG, "TTS ready=$ttsReady")
             tts?.speak("Clara Vis ativada", TextToSpeech.QUEUE_FLUSH, null, "welcome")
         }
@@ -228,19 +233,41 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     private var lastSceneSpeakTime = 0L
 
-    private fun speakDetections(detections: List<Detection>) {
+    // Classes de perigo imediato — bypass do cooldown normal
+    private val urgentLabels = setOf(
+        "escada", "buraco", "bueiro", "poça", "meio-fio",
+        "dano no pavimento", "tampa de esgoto", "barreira",
+        // v1 labels
+        "escada descendo", "escada subindo"
+    )
+    private val URGENT_TTS_INTERVAL = 800L  // 0.8s para perigos
+    private var lastUrgentLabel = ""
+
+    private fun speakDetections(detections: List<Detection>, approaching: Set<Int> = emptySet()) {
         if (!ttsReady || !ttsEnabled || detections.isEmpty()) return
 
         val now = System.currentTimeMillis()
-        if (now - lastTtsTime < ttsInterval) return
-        if (now - lastSceneSpeakTime < 15000L) return
+
+        // Verificar se há perigo urgente
+        val hasUrgent = detections.any { it.label in urgentLabels }
+        val hasApproaching = approaching.isNotEmpty()
+
+        // Cooldown reduzido para perigos urgentes ou objetos se aproximando
+        val effectiveInterval = when {
+            hasUrgent || hasApproaching -> URGENT_TTS_INTERVAL
+            else -> ttsInterval
+        }
+
+        if (now - lastTtsTime < effectiveInterval) return
+        // Scene description bloqueia TTS normal, mas NÃO urgente
+        if (!hasUrgent && now - lastSceneSpeakTime < 15000L) return
         lastTtsTime = now
 
-        // Prioridade: se aproximando > obstáculos > pessoas > veículos > animais > outros
-        val approaching = detectApproaching(detections)
+        // Prioridade: perigo urgente > se aproximando > obstáculos > pessoas > veículos > animais
         val sorted = detections.withIndex().sortedWith(compareBy {
             when {
-                it.index in approaching -> -1  // Se aproximando = máxima prioridade
+                it.value.label in urgentLabels -> -2   // Perigo imediato
+                it.index in approaching -> -1          // Se aproximando
                 it.value.category == ObjectCategory.OBSTACLE -> 0
                 it.value.category == ObjectCategory.PERSON -> 1
                 it.value.category == ObjectCategory.VEHICLE -> 2
@@ -252,7 +279,14 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         val toAnnounce = sorted.take(3)
         val phrases = toAnnounce.map { (index, det) ->
             val position = objectDetector?.getPosition(det) ?: "à frente"
-            val prefix = if (index in approaching) "atenção, " else ""
+            val isUrgent = det.label in urgentLabels
+            val isApproaching = index in approaching
+            val prefix = when {
+                isUrgent && det.label != lastUrgentLabel -> "atenção, "
+                isApproaching -> "atenção, "
+                else -> ""
+            }
+            if (isUrgent) lastUrgentLabel = det.label
             "$prefix${det.label} $position"
         }
 
@@ -507,7 +541,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     runOnUiThread {
                         binding.overlayView.approachingIndices = approaching
                         binding.overlayView.updateDetections(detections)
-                        speakDetections(detections)
+                        speakDetections(detections, approaching)
                     }
                 }
 

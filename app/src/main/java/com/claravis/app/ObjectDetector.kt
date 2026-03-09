@@ -290,12 +290,12 @@ class ObjectDetector(private val context: Context) {
         11,  // vaso
     )
     // Threshold mais alto para classes não-confiáveis
-    private val UNRELIABLE_CLASS_THRESHOLD = 0.75f
+    private val UNRELIABLE_CLASS_THRESHOLD = 0.60f
 
     companion object {
         private const val TAG = "ClaraVis-Detector"
-        private const val CONFIDENCE_THRESHOLD = 0.50f   // Voltou para 0.50 — modelo v2 mais confiável
-        private const val HIGH_CONF_THRESHOLD = 0.65f    // Para classes propensas a confusão
+        private const val CONFIDENCE_THRESHOLD = 0.35f   // Baixo para detectar mais, TTS rápido compensa
+        private const val HIGH_CONF_THRESHOLD = 0.50f    // Para classes propensas a confusão
         private const val IOU_THRESHOLD = 0.45f
         private const val MAX_BOX_AREA = 0.70f           // Box > 70% da tela = provavelmente fundo
         private const val SMALL_OBJ_MAX_AREA = 0.35f     // Objetos pequenos > 35% = falso positivo
@@ -520,7 +520,7 @@ class ObjectDetector(private val context: Context) {
                 }
             }
 
-            if (maxScore < CONFIDENCE_THRESHOLD * 0.8f) continue  // Pre-filter rápido (threshold base * 0.8)
+            if (maxScore < CONFIDENCE_THRESHOLD * 0.7f) continue  // Pre-filter rápido
 
             val cx = output[0][i] / coordScale
             val cy = output[1][i] / coordScale
