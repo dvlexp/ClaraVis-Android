@@ -68,6 +68,60 @@ class ObjectDetector(private val context: Context) {
         "lixeira grande", "bolsa", "folhas", "celular", "moto", "sofá"
     )
 
+    // ── Labels ClaraVis v2 (37 classes) — treino #2 multi-dataset ──
+    private val claravisV2Labels = arrayOf(
+        "pessoa", "carro", "moto", "bicicleta", "ônibus", "caminhão", "cachorro", "gato",
+        "escada", "buraco", "bueiro", "meio-fio", "poste", "faixa de pedestre", "calçada",
+        "poça", "semáforo", "ponto de ônibus", "hidrante", "placa de pare", "bollard",
+        "árvore", "banco", "patinete", "barreira", "poste de luz", "tampa de esgoto",
+        "dano no pavimento", "porta", "cadeira", "mesa", "sofá", "cama", "mochila",
+        "bolsa", "lixeira", "tronco"
+    )
+
+    // ── Classificação ClaraVis v2 → categoria de navegação ──
+    private val claravisV2CategoryMap = mapOf(
+        0 to ObjectCategory.PERSON,    // pessoa
+        // Veículos
+        1 to ObjectCategory.VEHICLE,   // carro
+        2 to ObjectCategory.VEHICLE,   // moto
+        3 to ObjectCategory.VEHICLE,   // bicicleta
+        4 to ObjectCategory.VEHICLE,   // ônibus
+        5 to ObjectCategory.VEHICLE,   // caminhão
+        23 to ObjectCategory.VEHICLE,  // patinete
+        // Animais
+        6 to ObjectCategory.ANIMAL,    // cachorro
+        7 to ObjectCategory.ANIMAL,    // gato
+        // Obstáculos — TUDO que importa para navegação
+        8 to ObjectCategory.OBSTACLE,  // escada ⚠️
+        9 to ObjectCategory.OBSTACLE,  // buraco ⚠️
+        10 to ObjectCategory.OBSTACLE, // bueiro ⚠️
+        11 to ObjectCategory.OBSTACLE, // meio-fio ⚠️
+        12 to ObjectCategory.OBSTACLE, // poste
+        13 to ObjectCategory.OBSTACLE, // faixa de pedestre
+        14 to ObjectCategory.OBSTACLE, // calçada
+        15 to ObjectCategory.OBSTACLE, // poça ⚠️
+        16 to ObjectCategory.OBSTACLE, // semáforo
+        17 to ObjectCategory.OBSTACLE, // ponto de ônibus
+        18 to ObjectCategory.OBSTACLE, // hidrante
+        19 to ObjectCategory.OBSTACLE, // placa de pare
+        20 to ObjectCategory.OBSTACLE, // bollard
+        21 to ObjectCategory.OBSTACLE, // árvore
+        22 to ObjectCategory.OBSTACLE, // banco
+        24 to ObjectCategory.OBSTACLE, // barreira ⚠️
+        25 to ObjectCategory.OBSTACLE, // poste de luz
+        26 to ObjectCategory.OBSTACLE, // tampa de esgoto ⚠️
+        27 to ObjectCategory.OBSTACLE, // dano no pavimento ⚠️
+        28 to ObjectCategory.OBSTACLE, // porta
+        29 to ObjectCategory.OBSTACLE, // cadeira
+        30 to ObjectCategory.OBSTACLE, // mesa
+        31 to ObjectCategory.OBSTACLE, // sofá
+        32 to ObjectCategory.OBSTACLE, // cama
+        33 to ObjectCategory.OBSTACLE, // mochila
+        34 to ObjectCategory.OBSTACLE, // bolsa
+        35 to ObjectCategory.OBSTACLE, // lixeira
+        36 to ObjectCategory.OBSTACLE  // tronco
+    )
+
     // Labels ativas — selecionadas automaticamente pelo modelo carregado
     private var labels = cocoLabels
 
@@ -160,7 +214,7 @@ class ObjectDetector(private val context: Context) {
         73, 74, 75, 76, 77, 78, 79  // livro, relógio, etc.
     )
 
-    // ClaraVis: objetos pequenos — sapato, chinelo, celular, papel, flor, folhas
+    // ClaraVis v1: objetos pequenos — sapato, chinelo, celular, papel, flor, folhas
     private val claravisSmallObjectClasses = setOf(
         3,   // livro
         7,   // flor
@@ -170,6 +224,13 @@ class ObjectDetector(private val context: Context) {
         18,  // torneira
         31,  // folhas
         32   // celular
+    )
+
+    // ClaraVis v2: objetos tipicamente pequenos
+    private val claravisV2SmallObjectClasses = setOf(
+        20,  // bollard
+        18,  // hidrante
+        26,  // tampa de esgoto
     )
 
     private var smallObjectClasses = cocoSmallObjectClasses
@@ -185,12 +246,20 @@ class ObjectDetector(private val context: Context) {
         69, // forno
     )
 
-    // ClaraVis: cama, sofá, mesa podem ser confundidos com pisos/paredes
+    // ClaraVis v1: cama, sofá, mesa podem ser confundidos com pisos/paredes
     private val claravisConfusionProneClasses = setOf(
         0,   // cama
         5,   // cômoda
         15,  // sofá
         34   // sofá (2)
+    )
+
+    // ClaraVis v2: classes que podem ser confundidas
+    private val claravisV2ConfusionProneClasses = setOf(
+        14,  // calçada (pode cobrir tela inteira)
+        27,  // dano no pavimento
+        31,  // sofá
+        32,  // cama
     )
 
     private var confusionProneClasses = cocoConfusionProneClasses
@@ -225,8 +294,8 @@ class ObjectDetector(private val context: Context) {
 
     companion object {
         private const val TAG = "ClaraVis-Detector"
-        private const val CONFIDENCE_THRESHOLD = 0.60f   // Subiu para 0.60 — reduz falsos positivos agressivamente
-        private const val HIGH_CONF_THRESHOLD = 0.70f    // Para classes propensas a confusão
+        private const val CONFIDENCE_THRESHOLD = 0.50f   // Voltou para 0.50 — modelo v2 mais confiável
+        private const val HIGH_CONF_THRESHOLD = 0.65f    // Para classes propensas a confusão
         private const val IOU_THRESHOLD = 0.45f
         private const val MAX_BOX_AREA = 0.70f           // Box > 70% da tela = provavelmente fundo
         private const val SMALL_OBJ_MAX_AREA = 0.35f     // Objetos pequenos > 35% = falso positivo
@@ -264,7 +333,8 @@ class ObjectDetector(private val context: Context) {
         // Ordem de preferência: float16 (menor, quase mesma qualidade) > float32 > nano
         // Também verifica SD card para modelos customizados (fine-tuned)
         val modelCandidates = listOf(
-            "claravis_model_416.tflite" to "asset",   // ClaraVis fine-tuned 36 classes
+            "claravis_v2_model_416.tflite" to "asset", // ClaraVis v2 — 37 classes, treino #2
+            "claravis_model_416.tflite" to "asset",    // ClaraVis v1 — 36 classes, fallback
         )
 
         // Verificar modelos no SD card (permite upgrade sem reinstalar)
@@ -314,34 +384,43 @@ class ObjectDetector(private val context: Context) {
     }
 
     /**
-     * Auto-detecta se o modelo é COCO (80 classes) ou ClaraVis fine-tuned (36 classes)
-     * pelo output shape: [1, 4+numClasses, numBoxes]
-     * COCO: 4+80=84, ClaraVis: 4+36=40
+     * Auto-detecta o modelo pelo output shape: [1, 4+numClasses, numBoxes]
+     * ClaraVis v2: 4+37=41, ClaraVis v1: 4+36=40, COCO: 4+80=84
      */
     private fun detectModelType(interp: Interpreter) {
         val outputShape = interp.getOutputTensor(0).shape()
-        // Output shape é [1, 4+numClasses, numBoxes] ou [1, numBoxes, 4+numClasses]
         val dim1 = outputShape[1]
         val dim2 = outputShape[2]
-        val numClassesPlusFour = minOf(dim1, dim2)  // O menor é 4+numClasses
+        val numClassesPlusFour = minOf(dim1, dim2)
 
         val numClasses = numClassesPlusFour - 4
         Log.i(TAG, "Detected $numClasses classes in model (output shape: ${outputShape.contentToString()})")
 
-        if (numClasses == 36) {
-            labels = claravisLabels
-            categoryMap = claravisCategoryMap
-            smallObjectClasses = claravisSmallObjectClasses
-            confusionProneClasses = claravisConfusionProneClasses
-            irrelevantTinyClasses = claravisIrrelevantTinyClasses
-            Log.i(TAG, "Using ClaraVis fine-tuned labels (36 classes)")
-        } else {
-            labels = cocoLabels
-            categoryMap = cocoCategoryMap
-            smallObjectClasses = cocoSmallObjectClasses
-            confusionProneClasses = cocoConfusionProneClasses
-            irrelevantTinyClasses = cocoIrrelevantTinyClasses
-            Log.i(TAG, "Using COCO labels ($numClasses classes)")
+        when (numClasses) {
+            37 -> {
+                labels = claravisV2Labels
+                categoryMap = claravisV2CategoryMap
+                smallObjectClasses = claravisV2SmallObjectClasses
+                confusionProneClasses = claravisV2ConfusionProneClasses
+                irrelevantTinyClasses = emptySet()
+                Log.i(TAG, "Using ClaraVis v2 labels (37 classes, treino #2)")
+            }
+            36 -> {
+                labels = claravisLabels
+                categoryMap = claravisCategoryMap
+                smallObjectClasses = claravisSmallObjectClasses
+                confusionProneClasses = claravisConfusionProneClasses
+                irrelevantTinyClasses = claravisIrrelevantTinyClasses
+                Log.i(TAG, "Using ClaraVis v1 labels (36 classes, treino #1)")
+            }
+            else -> {
+                labels = cocoLabels
+                categoryMap = cocoCategoryMap
+                smallObjectClasses = cocoSmallObjectClasses
+                confusionProneClasses = cocoConfusionProneClasses
+                irrelevantTinyClasses = cocoIrrelevantTinyClasses
+                Log.i(TAG, "Using COCO labels ($numClasses classes)")
+            }
         }
     }
 
