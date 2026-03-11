@@ -1,6 +1,6 @@
 # ClaraVis — Referencias Bibliograficas e Fontes
 
-> **Versao:** 1.0 | **Data:** 2026-03-10
+> **Versao:** 2.0 | **Data:** 2026-03-11
 > **Uso:** Referencia cruzada para Pitch Deck, Plano de Negocios e materiais para investidores.
 > Cada entrada possui um identificador [REF-XX] citado nos documentos.
 
@@ -198,6 +198,291 @@
 
 ---
 
+## Deteccao de Objetos e Modelos de IA
+
+**[REF-60]** Ultralytics. *YOLO11 / YOLOv10 / YOLOv9*. 2024-2025.
+- Dado: YOLO11 com C3k2 + C2PSA; YOLOv10 NMS-free (Tsinghua); todos exportam TFLite/TensorRT/CoreML
+- GitHub: https://github.com/ultralytics/ultralytics (40K+ stars)
+
+**[REF-61]** Lv, Wenyu et al. (Baidu). "DETRs Beat YOLOs on Real-time Object Detection (RT-DETR)." *CVPR 2024*.
+- Dado: Primeiro detector transformer end-to-end em tempo real; elimina NMS
+- GitHub: https://github.com/lyuwenyu/RT-DETR
+
+**[REF-62]** Nav-YOLO. "A Lightweight and Efficient Object Detection Model for Real-Time Indoor Navigation on Mobile Platforms." *MDPI ISPRS Int. J. Geo-Information*, 2025.
+- GitHub: https://github.com/back2-thebasic/NavYolo
+
+**[REF-63]** YOLO-OD. "Obstacle Detection for Visually Impaired Navigation Assistance." *PMC/MDPI Sensors*, 2024.
+- URL: https://pmc.ncbi.nlm.nih.gov/articles/PMC11645096/
+
+**[REF-64]** YOLO-Extreme. "Obstacle Detection for Visually Impaired Navigation Under Foggy Weather." *PMC*, 2025.
+- URL: https://pmc.ncbi.nlm.nih.gov/articles/PMC12300934/
+
+**[REF-65]** Yu, Samuel; Lee, Heon; Kim, John. "LYTNet: A Convolutional Neural Network for Real-Time Pedestrian Traffic Lights and Zebra Crossing Recognition." *CAIP 2019 + ICCV 2019 Workshops*.
+- GitHub: https://github.com/samuelyu2002/ImVisible (inclui dataset PTL)
+
+**[REF-66]** FlashLightNet. "An End-to-End Deep Learning Framework for Real-Time Detection and Classification of Static and Flashing Traffic Light States." *MDPI Sensors*, 2025.
+- URL: https://www.mdpi.com/1424-8220/25/20/6423
+
+**[REF-67]** DSC-Net. "Enhancing Blind Road Semantic Segmentation with a Dual-Branch Swin-CNN Architecture." *MDPI Sensors*, 2024.
+- URL: https://pmc.ncbi.nlm.nih.gov/articles/PMC11435784/
+
+**[REF-68]** QPULM. "Towards walkable footpath detection for the visually impaired on Bangladeshi roads with smartphones using deep edge intelligence." *ScienceDirect*, 2025.
+- URL: https://www.sciencedirect.com/science/article/pii/S2590005625000153
+
+**[REF-69]** LP-YOLO. "Lightweight Pedestrian Detection (YOLOv11 Optimized)." *ScienceDirect*, 2025.
+- URL: https://www.sciencedirect.com/science/article/abs/pii/S1051200425003653
+
+**[REF-70]** DSR-YOLO. "YOLOv8 Optimized for Pedestrian Detection." *ScienceDirect*, 2025.
+- URL: https://www.sciencedirect.com/science/article/pii/S2667241325000096
+
+---
+
+## Estimativa de Profundidade
+
+**[REF-71]** Yang et al. "Depth Anything V2: A More Capable Foundation Model for Monocular Depth Estimation." *NeurIPS 2024*.
+- Dado: Modelos de 25M a 1.3B params; 10x mais rapido que Stable Diffusion; ONNX/TensorRT/Qualcomm AI Hub
+- GitHub: https://github.com/DepthAnything/Depth-Anything-V2
+
+**[REF-72]** Ranftl, Rene et al. (Intel ISL). "MiDaS v3.1: Monocular Depth Estimation." 2022-2024.
+- Dado: Multiplos tamanhos de modelo; Small ~25MB, ~30 FPS Jetson; licenca MIT
+- GitHub: https://github.com/isl-org/MiDaS
+
+**[REF-73]** Luxonis. *OAK-D Lite / OAK-D Pro*. 2024.
+- Dado: OAK-D Lite $149, 91x28mm, 4 TOPS on-device, 0.2-19m
+- Intel RealSense spin-out (jul. 2025) como empresa independente
+- GitHub (DepthAI): https://github.com/luxonis/depthai (Apache 2.0)
+
+**[REF-74]** Chip-scale dToF LiDAR. Tecnologia tipo iPhone LiDAR para depth sensing miniaturizado.
+- Viavel em glasses; Apple-style ja cabe em smartphones
+
+**[REF-75]** Prompt Depth Anything. "Prompting Depth Anything for 4K Resolution Accurate Metric Depth Estimation." *arXiv*, 2024.
+- URL: https://promptda.github.io/
+
+**[REF-76]** Texas Instruments / Infineon. *mmWave Radar para wearables*.
+- TI AWR1843: 10.4x10.4mm, ~$30, 1.5W, 0.2-120m
+- Infineon BGT60TR13C: 6.5x5mm, ~$15, 0.5W, 0.2-10m
+- SDK: https://github.com/PreSenseRadar/OpenRadar
+
+---
+
+## Audio Espacial e Sonificacao
+
+**[REF-77]** Cuevas-Rodriguez et al. "3D Tune-In Toolkit: An open-source library for real-time binaural spatialisation." *PLOS ONE*, 2019.
+- Dado: C++, HRTF binaural, simulacao de aparelho auditivo, cross-platform
+- GitHub: https://github.com/3DTune-In/3dti_AudioToolkit
+
+**[REF-78]** Valve Software. *Steam Audio*. Ongoing.
+- Dado: HRTF binaural, ray tracing acustico, baixa latencia, mobile-compatible, gratis
+- GitHub: https://github.com/ValveSoftware/steam-audio
+
+**[REF-79]** McCormack, Leo. *Spatial Audio Framework (SAF)*. C/C++ library.
+- GitHub: https://github.com/leomccormack/Spatial_Audio_Framework
+
+**[REF-80]** Schwartz, B.S.; King, S.; Bell, T. "EchoSee: An Assistive Mobile Application for Real-Time 3D Environment Reconstruction and Sonification." *MDPI Bioengineering*, 2024.
+- Dado: ~60fps sonificacao 3D em tempo real
+- URL: https://pmc.ncbi.nlm.nih.gov/articles/PMC11351581/
+
+**[REF-81]** Tecnicas de sonificacao de mapas de profundidade.
+- Stereo panning (direcao), frequencia (distancia), loudness (tamanho), BRR (aproximacao)
+
+**[REF-82]** Meijer, Peter. "The vOICe sensory substitution system." 1992 (ongoing).
+- Classico: X→tempo, Y→frequencia, brilho→volume
+
+**[REF-83]** "Auditory and tactile frequency mapping for visual distance perception: A step forward in sensory substitution." *PMC*, 2025.
+- Dado: Funcoes psicofisicas validadas para mapeamento cross-modal distancia→frequencia
+- URL: https://pmc.ncbi.nlm.nih.gov/articles/PMC11875370/
+
+---
+
+## Feedback Haptico
+
+**[REF-84]** Sistemas de feedback haptico (gaming/VR).
+- bHaptics TactSuit X40: 40 pontos, $549
+- OWO Skin: eletro-muscular, 10 zonas, $299
+- DIY haptic belt: Arduino + 4-8 ERM motors, ~$50
+
+**[REF-85]** Gao Yun et al. (NJUPT). "A wearable obstacle avoidance device for visually impaired individuals with cross-modal learning." *Nature Communications*, 2025.
+- Dado: ~400g oculos, 100% collision avoidance, <320ms resposta, 11h bateria
+- GitHub: https://github.com/MMCNJUPT/WOAD
+
+**[REF-86]** Kilian, J. et al. "The Unfolding Space Glove: A Wearable Spatio-Visual to Haptic Sensory Substitution Device." *MDPI Sensors*, 2022.
+- Dado: Testado com cegos (n=8); todas condicoes de iluminacao
+- GitHub: https://github.com/jakobkilian/unfolding-space
+
+**[REF-87]** Wicab Inc. *BrainPort Vision Pro*. FDA-approved 2015.
+- Dado: 394-400 eletrodos na lingua, ~US$ 7.995, 10h treinamento
+- URL: https://www.wicab.com/brainport-vision-pro
+
+---
+
+## AR Display e Hardware
+
+**[REF-88]** Tecnologias de display AR/HUD para wearables.
+- Xreal Light: birdbath, 1920x1080/eye, $699
+- RayNeo X3 Pro: microLED waveguide (upcoming)
+- Project North Star: open-source (Ultraleap) — https://github.com/leapmotion/ProjectNorthStar
+
+**[REF-89]** eSight / NuEyes — especificacoes de magnificacao.
+- eSight Go: ate 24x zoom, dual FHD OLED, $4.950
+- NuEyes e3+: ate 18x, 16MP, 110° FOV, ~$5.995
+
+**[REF-90]** Apple. *Vision Pro Accessibility Features*. visionOS 3, 2025.
+- Dado: Live Recognition, Zoom magnification, Color filters, Spatial Audio VoiceOver
+- URL: https://www.apple.com/newsroom/2025/05/apple-unveils-powerful-accessibility-features-coming-later-this-year/
+
+**[REF-91]** Night vision digital para wearables.
+- Sony STARVIS 2: sensor low-light, $50-200, chip-scale
+- Sem restricao de exportacao (diferente de tubos Gen3+ militares)
+
+---
+
+## VLMs (Visual Language Models)
+
+**[REF-92]** SmolVLM2. "Video-Instruct Models." HuggingFace, 2025.
+- Dado: 500M e 2.2B params; 500M potencialmente viavel no Jetson Orin NX 16GB
+- URL: https://arxiv.org/html/2511.10615
+
+**[REF-93]** LLaVA-BindPW. "Lightweight Visual Accessibility LLaVA Architecture." *Nature Scientific Reports*, 2025.
+- Dado: Gemma-7B com sparse MoE; otimizado para assistencia a cegos
+- URL: https://www.nature.com/articles/s41598-025-23023-w
+
+**[REF-94]** Qualcomm. *Snapdragon AR1+ Gen 1*. AWE 2025.
+- Dado: Display binocular 1280x1280, 12MP camera, 14-bit ISP, on-device Llama 3.2 1B, ~4nm
+- URL: https://www.qualcomm.com/xr-vr-ar/products/ar-series/snapdragon-ar1-gen-1-platform
+- Review: https://9to5google.com/2025/06/10/snapdragon-ar1-gen-1/
+
+**[REF-95]** WalkVLM. "Aid Visually Impaired People Walking by Vision Language Model." *arXiv* 2412.20903, 2024.
+- Dado: 12K video-annotation pairs; chain-of-thought hierarquico
+- URL: https://walkvlm2024.github.io/
+
+**[REF-96]** WalkVLM v2. "Less Redundancy: Boosting Practicality of VLM in Walking Assistants." *arXiv*, 2025.
+- URL: https://arxiv.org/abs/2508.16070
+
+---
+
+## OCR e Reconhecimento Facial
+
+**[REF-97]** Google. *ML Kit Text Recognition v2*. 2024.
+- Dado: On-device Android (API 21+); Latin + CJK + Devanagari; bundled/unbundled
+- URL: https://developers.google.com/ml-kit/vision/text-recognition/v2/android
+
+**[REF-98]** PaddlePaddle (Baidu). *PaddleOCR v3.0 / PP-OCRv5*. 2025.
+- Dado: ~9.6MB mobile model; 100+ idiomas; mobile/embedded/IoT
+- GitHub: https://github.com/PaddlePaddle/PaddleOCR (72K+ stars)
+
+**[REF-99]** DeepInsight. *InsightFace / InspireFace SDK*. ArcFace (CVPR 2019).
+- Dado: 64MB RAM (InspireFace SDK); ARM, x86, CUDA, RKNN; 24K+ stars
+- GitHub: https://github.com/deepinsight/insightface
+
+**[REF-100]** EdgeFace. "Efficient Face Recognition Model for Edge Devices." *arXiv*, 2023-2024.
+- URL: https://arxiv.org/html/2307.01838v2
+
+**[REF-101]** "Beyond Real Faces: Synthetic Datasets Can Achieve Reliable Recognition Performance without Privacy Compromise." *arXiv*, 2025.
+- URL: https://arxiv.org/html/2510.17372v1
+
+---
+
+## Navegacao e SLAM
+
+**[REF-102]** Campos et al. (Univ. Zaragoza). "ORB-SLAM3: An Accurate Open-Source Library for Visual, Visual-Inertial and Multi-Map SLAM." *IEEE T-RO*, 2021.
+- Dado: 3.6cm acuracia EuRoC, 9mm TUM-VI; mono/stereo/RGB-D + fisheye
+- GitHub: https://github.com/UZ-SLAMLab/ORB_SLAM3 (GPLv3)
+
+**[REF-103]** SELM-SLAM3. "Deep Learning-Powered Visual SLAM for Assisting Visually Impaired Navigation." *VISIGRAPP 2025*.
+- Dado: SuperPoint + LightGlue em ORB-SLAM3; 87.84% melhor em low-texture
+- URL: https://arxiv.org/html/2510.20549
+
+**[REF-104]** PhoneGuide-SLAM. "Low-Cost Smartphone Navigation for the Visually Impaired Using Visual Semantic SLAM." *PRCV 2025*.
+- URL: https://link.springer.com/chapter/10.1007/978-981-95-5679-3_21
+
+**[REF-105]** MIT-SPARK. *Kimera: Real-Time Metric-Semantic SLAM*. 2020-2024.
+- GitHub: https://github.com/MIT-SPARK/Kimera
+
+**[REF-106]** MIT-SPARK. *Hydra: 3D Scene Graphs from Sensor Data*. 2022-2024.
+- GitHub: https://github.com/MIT-SPARK/Hydra
+
+**[REF-107]** UWB Indoor Positioning para deficientes visuais.
+- NTT Data: estadio 20K lugares em Londres — usuario cego encontrou assento
+- Mercado UWB: $2.0B (2025) → $3.3B (2028), CAGR 18.9%
+- URL: https://www.mdpi.com/2076-3417/14/13/5646
+- URL: https://locatify.com/uwb-ultrawideband-indoor-positioning-for-visually-impaired/
+
+**[REF-108]** BLE Beacons (iBeacon/Eddystone) para posicionamento indoor.
+- Acuracia: 1-3m (classico), ~0.5m (BT 5.1 AoA); beacons $5-15 cada
+
+**[REF-109]** Lazarillo. App de navegacao GPS acessivel.
+- Dado: 250K+ usuarios, 29 paises, gratuito
+- URL: https://lazarillo.app/
+
+---
+
+## Visao Termica e Noturna
+
+**[REF-110]** Teledyne FLIR. *Lepton XDS*. Lancado MWC fev. 2026.
+- Dado: 160x120 termal + 5MP visivel, fusao MSX, $109-239, tamanho de moeda, ~200mW
+- Projetado para drones, wearables e IoT
+- URL: https://uasweekly.com/2026/02/25/teledyne-flir-oem-launches-lepton-xds-thermal-visible-camera-at-mwc/
+- SDK: https://github.com/groupgets/LeptonModule
+
+---
+
+## Hardware / Semicondutores
+
+**[REF-111]** NVIDIA. *Jetson Orin NX 16GB + JetPack 6.2 Super Mode*. 2025.
+- Dado: 100-157 TOPS, 10-25W, $599; Super Mode dobra inferencia
+- URL: https://developer.nvidia.com/blog/nvidia-jetpack-6-2-brings-super-mode-to-nvidia-jetson-orin-nano-and-jetson-orin-nx-modules/
+
+**[REF-112]** Hailo. *Hailo-8 AI Accelerator*. 2024.
+- Dado: 26 TOPS, 2.5W, menor que moeda, M.2; melhor TOPS/W do mercado
+- URL: https://hailo.ai/products/ai-accelerators/hailo-8-ai-accelerator/
+
+**[REF-113]** Based Hardware. *OpenGlass: $20 AI Smart Glasses*. 2024.
+- GitHub: https://github.com/BasedHardware/OpenGlass (3K+ stars)
+
+**[REF-114]** TeamOpenSmartGlasses / Mentra. *Open Source Smart Glasses*. 2024.
+- GitHub: https://github.com/TeamOpenSmartGlasses/OpenSourceSmartGlasses (1K+ stars)
+
+**[REF-115]** Brilliant Labs. *Frame AI Glasses (Open-Source AR)*. 2024.
+- GitHub: https://github.com/brilliantlabsAR
+
+**[REF-116]** aghassel. *Focus AI Glasses*. Engineering Capstone, 2024.
+- GitHub: https://github.com/aghassel/Focus-AI-Glasses
+
+**[REF-117]** Matter Protocol. Smart home interoperability (Apple + Google + Amazon + Samsung).
+- Dado: 300+ dispositivos certificados (2025); versao 1.5 (nov. 2025)
+- URL: https://matter-smarthome.de/en/development/the-matter-standard-in-2026-a-status-review/
+
+---
+
+## Tracking e Interacao
+
+**[REF-118]** Pupil Labs. *Neon Eye Tracker*. Open-source.
+- GitHub: https://github.com/pupil-labs/pupil (LGPL)
+
+**[REF-119]** Ultraleap. *Helios Event Camera Gestures*. Dez. 2024.
+- Dado: 3x4mm sensor Prophesee GENX320, 20mW, micro-gestos para glasses
+- URL: https://www.ultraleap.com/company/news/press-release/helios-launch/
+
+**[REF-120]** ByteTrack / DeepSORT — multi-object tracking.
+- ByteTrack: https://github.com/ifzhang/ByteTrack
+- DeepSORT: https://github.com/nwojke/deep_sort
+
+---
+
+## Pesquisa Brasileira
+
+**[REF-121]** NavWear (UNESP + UFES). "Design and evaluation of a wearable device for obstacle detection for blind and visually impaired people." *Disability and Rehabilitation: Assistive Technology*, 2025.
+- Dado: Jetson Nano + Intel RealSense RGB-D + haptico nas alcas; FAPESP Grant 2019/14438-4
+- URL: https://www.tandfonline.com/doi/full/10.1080/17483107.2025.2477681
+
+**[REF-122]** Prof. Joao Neto (UFRB). Navegacao RFID em piso tatil. FAPESB.
+- URL: https://www.fapesb.ba.gov.br/professor-baiano-desenvolve-nova-tecnologia-assistiva-para-deficientes-visuais/
+
+**[REF-123]** UFBA. "Tecnologia Assistiva para Pessoas com Deficiencia Visual: analise da producao tecnologica no Brasil." *Cadernos de Prospeccao*, 2024.
+- URL: https://periodicos.ufba.br/index.php/nit/article/view/25903/0
+
+---
+
 ## Notas de Auditoria
 
 ### Dados corrigidos (versao anterior → versao auditada)
@@ -219,5 +504,6 @@
 
 ---
 
-*Documento de controle de referencias. Atualizado em 2026-03-10.*
+*Documento de controle de referencias. Atualizado em 2026-03-11.*
+*v2.0: Adicionadas REF-60 a REF-123 (pesquisa academica, cross-industria, hardware).*
 *Todas as URLs foram verificadas na data de publicacao.*
